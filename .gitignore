@@ -1,0 +1,35 @@
+# Compiled output
+target/
+*.class
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
+
+# Environment — never commit secrets
+.env
+*.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.suo
+*.user
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Uploaded files
+uploads/
+
+# Allure results and reports
+allure-results/
+allure-report/
+
+# Spring Boot packaged jar
+*.jar
+*.war
