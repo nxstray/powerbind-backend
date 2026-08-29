@@ -2,6 +2,7 @@ package com.powerbind.backend.config;
 
 import com.powerbind.backend.service.MqttMessageHandler;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -16,7 +17,8 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
-// MQTT inbound channel adapter — subscribes to ESP32 topics
+// MQTT inbound channel adapter — subscribes to ESP32 topics via Mosquitto broker
+@Slf4j
 @Configuration
 @RequiredArgsConstructor
 public class MqttConfig {
@@ -33,6 +35,9 @@ public class MqttConfig {
     @Value("${mqtt.topic.power}")
     private String powerTopic;
 
+    @Value("${mqtt.topic.logs:smart-home/logs/#}")
+    private String logsTopic;
+
     private final MqttMessageHandler mqttMessageHandler;
 
     @Bean
@@ -41,7 +46,11 @@ public class MqttConfig {
         MqttConnectOptions options = new MqttConnectOptions();
         options.setServerURIs(new String[]{brokerUrl});
         options.setCleanSession(true);
+        // Automatically reconnect if broker restarts — no manual intervention needed
         options.setAutomaticReconnect(true);
+        // Keep trying to reconnect every 10 seconds if broker is unavailable at startup
+        options.setConnectionTimeout(10);
+        options.setKeepAliveInterval(30);
         factory.setConnectionOptions(options);
         return factory;
     }
@@ -57,7 +66,8 @@ public class MqttConfig {
                 clientId + "-inbound",
                 mqttClientFactory(),
                 presenceTopic,
-                powerTopic
+                powerTopic,
+                logsTopic
         );
         adapter.setCompletionTimeout(5000);
         adapter.setConverter(new DefaultPahoMessageConverter());
@@ -70,6 +80,13 @@ public class MqttConfig {
     @Bean
     @ServiceActivator(inputChannel = "mqttInputChannel")
     public MessageHandler mqttMessageHandlerBean() {
-        return (Message<?> message) -> mqttMessageHandler.handle(message);
+        return (Message<?> message) -> {
+            try {
+                mqttMessageHandler.handle(message);
+            } catch (Exception e) {
+                // Log and swallow — prevents one bad message from killing the listener
+                log.error("[MQTT] Error processing message: {}", e.getMessage(), e);
+            }
+        };
     }
 }
