@@ -27,6 +27,7 @@ logs/
 uploads/
 
 # Allure results and reports
+.allure
 allure-results/
 allure-report/
 
