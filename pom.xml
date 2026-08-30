@@ -258,6 +258,12 @@
 			<version>5.8.0</version>
 			<scope>test</scope>
 		</dependency>
+
+		<dependency>
+			<groupId>io.projectreactor</groupId>
+			<artifactId>reactor-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -325,10 +331,21 @@
 					<includes>
 						<include>**/*Test.java</include>
 						<include>**/*Tests.java</include>
+						<include>**/*Runner.java</include>
 					</includes>
 					<systemPropertyVariables>
 						<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
 					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+			<!-- Clean plugin: tolerate transient file locks (OneDrive sync / IDE
+			     indexers) on Windows that otherwise fail every mvn clean with
+			     AccessDeniedException -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-clean-plugin</artifactId>
+				<configuration>
+					<failOnError>false</failOnError>
 				</configuration>
 			</plugin>
 		</plugins>
