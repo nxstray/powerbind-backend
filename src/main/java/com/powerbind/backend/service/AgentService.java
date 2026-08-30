@@ -1,8 +1,15 @@
 package com.powerbind.backend.service;
 
 import com.powerbind.backend.data.request.AgentRequest;
+import com.powerbind.backend.data.response.ChatMessageResponse;
+import com.powerbind.backend.global.ResourceNotFoundException;
+import com.powerbind.backend.model.ChatMessage;
 import com.powerbind.backend.model.Room;
+import com.powerbind.backend.model.User;
+import com.powerbind.backend.repository.ChatMessageRepository;
 import com.powerbind.backend.repository.RoomRepository;
+import com.powerbind.backend.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,17 +32,53 @@ public class AgentService {
     private final GroqService groqService;
     private final InfluxDBService influxDBService;
     private final RoomRepository roomRepository;
+    private final UserRepository userRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
     private static final double PLN_TARIFF = 1444.70;
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy HH:mm");
 
-    // Stream text chat with live energy context
-    public Flux<String> chat(AgentRequest.Chat request) {
+    // Stream text chat with live energy context — now persists per-user history
+    public Flux<String> chat(String username, AgentRequest.Chat request) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        chatMessageRepository.save(ChatMessage.builder()
+                .user(user).role("user").content(request.getMessage()).build());
+
         String systemPrompt = buildSystemPrompt();
         List<Map<String, Object>> messages = buildMessages(systemPrompt, request);
-        log.info("[Agent] Processing query: {}", request.getMessage());
-        return groqService.streamChat(messages);
+        log.info("[Agent] Processing query from {}: {}", username, request.getMessage());
+
+        StringBuilder fullReply = new StringBuilder();
+        return groqService.streamChat(messages)
+                .doOnNext(fullReply::append)
+                .doOnComplete(() -> chatMessageRepository.save(ChatMessage.builder()
+                        .user(user).role("assistant").content(fullReply.toString()).build()))
+                .doOnError(e -> log.error("[Agent] Stream failed for {}: {}", username, e.getMessage()));
+    }
+
+    // Fetch full chat history for the authenticated user, oldest first
+    public List<ChatMessageResponse> getHistory(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        return chatMessageRepository.findByUserOrderByCreatedAtAsc(user).stream()
+                .map(m -> ChatMessageResponse.builder()
+                        .id(m.getId().toString())
+                        .role(m.getRole())
+                        .content(m.getContent())
+                        .createdAt(m.getCreatedAt())
+                        .build())
+                .toList();
+    }
+
+    // Clear chat history for the authenticated user
+    public void clearHistory(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        chatMessageRepository.deleteByUser(user);
     }
 
     // Stream vision chat — analyze image + energy context
