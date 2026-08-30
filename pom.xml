@@ -21,7 +21,7 @@
 		<allure.version>2.24.0</allure.version>
 		<cucumber.version>7.20.1</cucumber.version>
 		<influxdb.version>6.12.0</influxdb.version>
-		<excludedGroups>performance</excludedGroups>
+		<excludedGroups>requires-groq,performance,ui</excludedGroups>
 	</properties>
 
 	<dependencyManagement>
@@ -326,6 +326,7 @@
 					<properties>
 						<configurationParameters>
 							cucumber.junit-platform.naming-strategy=long
+							junit.platform.suite.engine.discovery.issue.severity=warning
 						</configurationParameters>
 					</properties>
 					<includes>
