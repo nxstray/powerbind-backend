@@ -19,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -41,6 +43,7 @@ public class AgentService {
     private final DocumentService documentService;
     private final ChatMessageRepository chatMessageRepository;
     private final ConversationRepository conversationRepository;
+    private final MemoryService memoryService;
 
     private static final double PLN_TARIFF = 1444.70;
     private static final int TITLE_MAX_LENGTH = 50;
@@ -48,6 +51,7 @@ public class AgentService {
             DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy HH:mm");
 
     // Stream text chat with live energy context — persists into a conversation thread
+    // and triggers background extraction of any durable facts worth remembering
     public Flux<String> chat(String username, AgentRequest.Chat request) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -57,7 +61,7 @@ public class AgentService {
         chatMessageRepository.save(ChatMessage.builder()
                 .user(user).conversation(conversation).role("user").content(request.getMessage()).build());
 
-        String systemPrompt = buildSystemPrompt();
+        String systemPrompt = buildSystemPrompt(user);
         List<Map<String, Object>> messages = buildMessages(systemPrompt, request);
         log.info("[Agent] Processing query from {}: {}", username, request.getMessage());
 
@@ -69,6 +73,7 @@ public class AgentService {
                             .user(user).conversation(conversation).role("assistant").content(fullReply.toString()).build());
                     // touch the conversation so updatedAt bumps and it re-sorts to the top of the dropdown
                     conversationRepository.save(conversation);
+                    extractMemoriesInBackground(user);
                 })
                 .doOnError(e -> log.error("[Agent] Stream failed for {}: {}", username, e.getMessage()));
     }
@@ -120,7 +125,7 @@ public class AgentService {
             String base64 = Base64.getEncoder().encodeToString(bytes);
 
             // Prepend energy context to vision prompt
-            String enrichedPrompt = buildSystemPrompt() + "\n\nUser juga mengirimkan gambar. " + prompt;
+            String enrichedPrompt = buildSystemPrompt(null) + "\n\nUser juga mengirimkan gambar. " + prompt;
             return groqService.streamVisionChat(enrichedPrompt, base64);
         } catch (Exception e) {
             log.error("[Agent] Vision error: {}", e.getMessage());
@@ -146,7 +151,7 @@ public class AgentService {
         chatMessageRepository.save(ChatMessage.builder()
                 .user(user).conversation(conversation).role("user").content(userMessage).build());
 
-        String systemPrompt = buildSystemPrompt();
+        String systemPrompt = buildSystemPrompt(user);
         systemPrompt += "\n\n=== UPLOADED DOCUMENT: " + documentFile.getOriginalFilename() + " ===\n";
         systemPrompt += extractedText;
         systemPrompt += "\n=== END OF DOCUMENT ===\n";
@@ -165,6 +170,7 @@ public class AgentService {
                     chatMessageRepository.save(ChatMessage.builder()
                             .user(user).conversation(conversation).role("assistant").content(fullReply.toString()).build());
                     conversationRepository.save(conversation);
+                    extractMemoriesInBackground(user);
                 })
                 .doOnError(e -> log.error("[Agent] Document stream failed for {}: {}", username, e.getMessage()));
     }
@@ -172,6 +178,15 @@ public class AgentService {
     // Transcribe voice input via Whisper
     public String transcribe(MultipartFile audioFile) {
         return groqService.transcribe(audioFile);
+    }
+
+    // Run memory extraction off the streaming thread so it never delays or breaks the
+    // SSE response. This re-reads the user's full chat history (not just this turn) —
+    // fully invisible, no UI surface — errors are already caught/logged inside MemoryService.
+    private void extractMemoriesInBackground(User user) {
+        Mono.fromRunnable(() -> memoryService.extractAndSaveMemories(user))
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe();
     }
 
     // Resolve an existing conversation (verifying ownership) or create a new one titled from the first message
@@ -206,8 +221,10 @@ public class AgentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
     }
 
-    // Build system prompt with live data from InfluxDB and PostgreSQL
-    private String buildSystemPrompt() {
+    // Build system prompt with live data from InfluxDB and PostgreSQL, plus anything
+    // remembered long-term about this user. Pass null when there's no authenticated
+    // user in scope (e.g. vision chat currently has no per-user persistence).
+    private String buildSystemPrompt(User user) {
         double currentWatts = influxDBService.queryCurrentWatts();
         double todayKwh = influxDBService.queryTodayKwh();
         double estimatedCost = todayKwh * PLN_TARIFF;
@@ -251,6 +268,15 @@ public class AgentService {
         sb.append("- A typical Indonesian household uses 200-500 kWh/month\n");
         sb.append("- Suggest specific actions when anomalies are detected\n");
         sb.append("- Always give cost in Rupiah referencing PLN tariff\n");
+        sb.append("- If the user asks whether you remember them or past conversations: you do NOT keep a\n");
+        sb.append("  transcript of old messages, but you may have a few remembered facts about them below.\n");
+        sb.append("  If that section is non-empty, say naturally that you remember a few things about them\n");
+        sb.append("  (referencing one or two, not a raw dump). If it's empty, say you don't have anything\n");
+        sb.append("  specific saved about them yet — don't give a flat, scripted denial either way.\n");
+
+        if (user != null) {
+            sb.append(memoryService.buildMemoryPromptBlock(user));
+        }
 
         return sb.toString();
     }
