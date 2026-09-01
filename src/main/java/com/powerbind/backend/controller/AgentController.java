@@ -3,6 +3,7 @@ package com.powerbind.backend.controller;
 import com.powerbind.backend.data.ApiResponse;
 import com.powerbind.backend.data.request.AgentRequest;
 import com.powerbind.backend.data.response.ChatMessageResponse;
+import com.powerbind.backend.data.response.ConversationResponse;
 import com.powerbind.backend.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,7 +27,7 @@ public class AgentController {
 
     private final AgentService agentService;
 
-    // Text chat — streaming SSE
+    // Text chat — streaming SSE, persisted into a conversation thread
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "Stream AI energy advisor response via SSE")
     public Flux<String> chat(
@@ -53,18 +54,41 @@ public class AgentController {
         return ResponseEntity.ok(ApiResponse.ok(Map.of("text", text)));
     }
 
-    @GetMapping("/history")
-    @Operation(summary = "Get chat history for the authenticated user")
-    public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> history(
-            @AuthenticationPrincipal String username) {
-        return ResponseEntity.ok(ApiResponse.ok(agentService.getHistory(username)));
+    // Document chat — PDF/DOCX/TXT + text prompt, streaming SSE, persisted into a conversation thread
+    @PostMapping(value = "/document", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Stream AI response for document (PDF/DOCX) + text query")
+    public Flux<String> document(
+            @AuthenticationPrincipal String username,
+            @RequestParam("message") String message,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "conversationId", required = false) String conversationId) {
+        return agentService.documentChat(username, message, file, conversationId);
     }
 
-    @DeleteMapping("/history")
-    @Operation(summary = "Clear chat history for the authenticated user")
-    public ResponseEntity<ApiResponse<Void>> clearHistory(
+    // List all conversations for the authenticated user, most recently updated first
+    @GetMapping("/conversations")
+    @Operation(summary = "List conversations for the authenticated user")
+    public ResponseEntity<ApiResponse<List<ConversationResponse>>> getConversations(
             @AuthenticationPrincipal String username) {
-        agentService.clearHistory(username);
-        return ResponseEntity.ok(ApiResponse.ok("History cleared"));
+        return ResponseEntity.ok(ApiResponse.ok(agentService.getConversations(username)));
+    }
+
+    // Fetch all messages within a single conversation
+    @GetMapping("/conversations/{id}")
+    @Operation(summary = "Get all messages within a conversation")
+    public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getConversationMessages(
+            @AuthenticationPrincipal String username,
+            @PathVariable("id") String id) {
+        return ResponseEntity.ok(ApiResponse.ok(agentService.getConversationMessages(username, id)));
+    }
+
+    // Delete a conversation and all of its messages
+    @DeleteMapping("/conversations/{id}")
+    @Operation(summary = "Delete a conversation")
+    public ResponseEntity<ApiResponse<Void>> deleteConversation(
+            @AuthenticationPrincipal String username,
+            @PathVariable("id") String id) {
+        agentService.deleteConversation(username, id);
+        return ResponseEntity.ok(ApiResponse.ok("Conversation deleted"));
     }
 }
