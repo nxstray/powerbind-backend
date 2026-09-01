@@ -20,4 +20,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     // memory extractor a bounded window of the user's full history instead of just one turn.
     // Window size is controlled by the caller via Pageable (see MemoryService.HISTORY_WINDOW).
     List<ChatMessage> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
+
+    // Explicitly delete every message in a conversation before deleting the conversation
+    // itself — don't rely solely on the DB's ON DELETE CASCADE, since Hibernate's view of
+    // the schema (ddl-auto) can drift from what Flyway actually applied.
+    void deleteByConversation(Conversation conversation);
 }
