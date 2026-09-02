@@ -115,6 +115,8 @@ public class AgentService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         Conversation conversation = findOwnedConversation(user, conversationId);
+        // Delete messages explicitly first — don't rely solely on the DB's ON DELETE CASCADE
+        chatMessageRepository.deleteByConversation(conversation);
         conversationRepository.delete(conversation);
     }
 
