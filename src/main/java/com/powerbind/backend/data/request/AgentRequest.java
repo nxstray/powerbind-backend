@@ -16,6 +16,9 @@ public class AgentRequest {
 
         // Optional conversation history for multi-turn context
         private List<Turn> history;
+
+        // Existing conversation to continue — null/blank starts a new one
+        private String conversationId;
     }
 
     @Getter
