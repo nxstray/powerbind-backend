@@ -15,20 +15,13 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "User authentication — login, register, token management")
+@Tag(name = "Auth", description = "Authentication — username/password login with JWT")
 public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/register")
-    @Operation(summary = "Register a new user account")
-    public ResponseEntity<ApiResponse<AuthResponse.Profile>> register(
-            @Valid @RequestBody AuthRequest.Register request) {
-        return ResponseEntity.ok(ApiResponse.ok("Account created", authService.register(request)));
-    }
-
     @PostMapping("/login")
-    @Operation(summary = "Login with email and password — returns access and refresh token")
+    @Operation(summary = "Login with username and password")
     public ResponseEntity<ApiResponse<AuthResponse.TokenPair>> login(
             @Valid @RequestBody AuthRequest.Login request) {
         return ResponseEntity.ok(ApiResponse.ok("Login successful", authService.login(request)));
@@ -52,15 +45,15 @@ public class AuthController {
     @GetMapping("/me")
     @Operation(summary = "Get current authenticated user profile")
     public ResponseEntity<ApiResponse<AuthResponse.Profile>> me(
-            @AuthenticationPrincipal String email) {
-        return ResponseEntity.ok(ApiResponse.ok(authService.getProfile(email)));
+            @AuthenticationPrincipal String username) {
+        return ResponseEntity.ok(ApiResponse.ok(authService.getProfile(username)));
     }
 
     @PutMapping("/profile")
     @Operation(summary = "Update display name")
     public ResponseEntity<ApiResponse<AuthResponse.Profile>> updateProfile(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal String username,
             @Valid @RequestBody AuthRequest.UpdateProfile request) {
-        return ResponseEntity.ok(ApiResponse.ok("Profile updated", authService.updateProfile(email, request)));
+        return ResponseEntity.ok(ApiResponse.ok("Profile updated", authService.updateProfile(username, request)));
     }
 }
