@@ -36,33 +36,11 @@ public class AuthService {
     @Value("${jwt.refresh-expiration:604800000}")
     private long refreshExpiration;
 
-    // Register a new user — email must be unique
-    @Transactional
-    public AuthResponse.Profile register(AuthRequest.Register request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already registered");
-        }
-
-        User user = User.builder()
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .displayName(request.getDisplayName())
-                .build();
-
-        user = userRepository.save(user);
-
-        return AuthResponse.Profile.builder()
-                .id(user.getId().toString())
-                .email(user.getEmail())
-                .displayName(user.getDisplayName())
-                .build();
-    }
-
-    // Login with email and password — enforces 5-attempt lockout for 10 minutes
-    @Transactional
+    // Login with username and password — enforces 5-attempt lockout for 10 minutes
+    @Transactional(noRollbackFor = {IllegalArgumentException.class, AccountLockedException.class})
     public AuthResponse.TokenPair login(AuthRequest.Login request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
 
         // Check if account is currently locked
         if (user.getLockedUntil() != null && LocalDateTime.now().isBefore(user.getLockedUntil())) {
@@ -78,7 +56,6 @@ public class AuthService {
             user.setFailedAttempts(attempts);
 
             if (attempts >= maxAttempts) {
-                // Lock the account for lockoutMinutes
                 user.setLockedUntil(LocalDateTime.now().plusMinutes(lockoutMinutes));
                 user.setFailedAttempts(0);
                 userRepository.save(user);
@@ -88,7 +65,7 @@ public class AuthService {
             }
 
             userRepository.save(user);
-            throw new IllegalArgumentException("Invalid email or password");
+            throw new IllegalArgumentException("Invalid username or password");
         }
 
         // Successful login — reset failed attempts
@@ -96,7 +73,7 @@ public class AuthService {
         user.setLockedUntil(null);
         userRepository.save(user);
 
-        String accessToken = jwtUtil.generateToken(user.getEmail());
+        String accessToken = jwtUtil.generateToken(user.getUsername());
         String refreshToken = generateRefreshToken(user);
 
         return AuthResponse.TokenPair.builder()
@@ -119,7 +96,7 @@ public class AuthService {
         // Rotate refresh token on every use for security
         refreshTokenRepository.delete(token);
         String newRefreshToken = generateRefreshToken(token.getUser());
-        String newAccessToken = jwtUtil.generateToken(token.getUser().getEmail());
+        String newAccessToken = jwtUtil.generateToken(token.getUser().getUsername());
 
         return AuthResponse.TokenPair.builder()
                 .accessToken(newAccessToken)
@@ -135,21 +112,21 @@ public class AuthService {
     }
 
     // Get current user profile
-    public AuthResponse.Profile getProfile(String email) {
-        User user = userRepository.findByEmail(email)
+    public AuthResponse.Profile getProfile(String username) {
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         return AuthResponse.Profile.builder()
                 .id(user.getId().toString())
-                .email(user.getEmail())
+                .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .build();
     }
 
     // Update display name
     @Transactional
-    public AuthResponse.Profile updateProfile(String email, AuthRequest.UpdateProfile request) {
-        User user = userRepository.findByEmail(email)
+    public AuthResponse.Profile updateProfile(String username, AuthRequest.UpdateProfile request) {
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         user.setDisplayName(request.getDisplayName());
@@ -157,7 +134,7 @@ public class AuthService {
 
         return AuthResponse.Profile.builder()
                 .id(user.getId().toString())
-                .email(user.getEmail())
+                .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .build();
     }
@@ -170,7 +147,6 @@ public class AuthService {
                 .user(user)
                 .token(tokenValue)
                 .expiresAt(LocalDateTime.now().plusSeconds(refreshExpiration / 1000))
-                .createdAt(LocalDateTime.now())
                 .build();
 
         refreshTokenRepository.save(token);
