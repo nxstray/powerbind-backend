@@ -35,6 +35,7 @@ class AgentServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private ChatMessageRepository chatMessageRepository;
     @Mock private ConversationRepository conversationRepository;
+    @Mock private com.powerbind.backend.service.MemoryService memoryService;
 
     @InjectMocks private AgentService agentService;
 
@@ -46,6 +47,7 @@ class AgentServiceTest {
         lenient().when(roomRepository.findAll()).thenReturn(List.of());
         lenient().when(influxDBService.queryCurrentWatts()).thenReturn(0.0);
         lenient().when(influxDBService.queryTodayKwh()).thenReturn(0.0);
+        lenient().when(memoryService.buildMemoryPromptBlock(any())).thenReturn("");
     }
 
     @Test
