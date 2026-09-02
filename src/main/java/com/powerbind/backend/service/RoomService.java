@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -64,6 +65,8 @@ public class RoomService {
         Room room = roomRepository.findByMqttTopic(mqttTopic)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found for topic: " + mqttTopic));
         room.setPresenceDetected(detected);
+        // Explicitly set updated_at manually to force the refresh
+        room.setUpdatedAt(LocalDateTime.now());
 
         if (detected) {
             room.setNoPresenceSeconds(0);
