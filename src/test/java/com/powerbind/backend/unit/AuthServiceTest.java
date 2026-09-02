@@ -1,7 +1,9 @@
 package com.powerbind.backend.unit;
 
 import com.powerbind.backend.data.request.AuthRequest;
+import com.powerbind.backend.data.response.AuthResponse;
 import com.powerbind.backend.global.AccountLockedException;
+import com.powerbind.backend.model.RefreshToken;
 import com.powerbind.backend.model.User;
 import com.powerbind.backend.repository.RefreshTokenRepository;
 import com.powerbind.backend.repository.UserRepository;
@@ -15,9 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -83,5 +87,69 @@ class AuthServiceTest {
         when(userRepository.save(any())).thenReturn(user);
 
         assertThrows(AccountLockedException.class, () -> authService.login(req));
+    }
+
+    @Test
+    void refresh_withValidToken_shouldRotateAndReturnNewPair() {
+        User user = User.builder().username("admin").build();
+        RefreshToken oldToken = RefreshToken.builder()
+                .user(user)
+                .token("old-token")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .revoked(false)
+                .build();
+
+        AuthRequest.Refresh req = new AuthRequest.Refresh();
+        ReflectionTestUtils.setField(req, "refreshToken", "old-token");
+
+        when(refreshTokenRepository.findByToken("old-token")).thenReturn(Optional.of(oldToken));
+        when(jwtUtil.generateToken("admin")).thenReturn("new-access-token");
+
+        AuthResponse.TokenPair result = authService.refresh(req);
+
+        assertEquals("new-access-token", result.getAccessToken());
+        assertNotNull(result.getRefreshToken());
+        assertNotEquals("old-token", result.getRefreshToken());
+        // old token must be marked revoked, not deleted — needed for reuse detection
+        assertTrue(oldToken.isRevoked());
+        verify(refreshTokenRepository, never()).deleteAllByUser(any());
+    }
+
+    @Test
+    void refresh_withExpiredToken_shouldThrowAndDeleteToken() {
+        User user = User.builder().username("admin").build();
+        RefreshToken expired = RefreshToken.builder()
+                .user(user)
+                .token("expired-token")
+                .expiresAt(LocalDateTime.now().minusMinutes(1))
+                .revoked(false)
+                .build();
+
+        AuthRequest.Refresh req = new AuthRequest.Refresh();
+        ReflectionTestUtils.setField(req, "refreshToken", "expired-token");
+
+        when(refreshTokenRepository.findByToken("expired-token")).thenReturn(Optional.of(expired));
+
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh(req));
+        verify(refreshTokenRepository).delete(expired);
+    }
+
+    @Test
+    void refresh_withAlreadyRevokedToken_shouldDetectReuseAndRevokeAllSessions() {
+        User user = User.builder().username("admin").build();
+        RefreshToken reused = RefreshToken.builder()
+                .user(user)
+                .token("stolen-token")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .revoked(true) // already rotated once — being used again means it's compromised
+                .build();
+
+        AuthRequest.Refresh req = new AuthRequest.Refresh();
+        ReflectionTestUtils.setField(req, "refreshToken", "stolen-token");
+
+        when(refreshTokenRepository.findByToken("stolen-token")).thenReturn(Optional.of(reused));
+
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh(req));
+        verify(refreshTokenRepository).deleteAllByUser(user);
     }
 }
