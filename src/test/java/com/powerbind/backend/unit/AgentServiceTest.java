@@ -1,6 +1,7 @@
 package com.powerbind.backend.unit;
 
 import com.powerbind.backend.data.request.AgentRequest;
+import com.powerbind.backend.global.ResourceNotFoundException;
 import com.powerbind.backend.model.ChatMessage;
 import com.powerbind.backend.model.Conversation;
 import com.powerbind.backend.model.User;
@@ -24,6 +25,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -115,5 +119,31 @@ class AgentServiceTest {
         agentService.getConversationMessages("alice", conversationId.toString());
 
         verify(chatMessageRepository).findByConversationOrderByCreatedAtAsc(conversation);
+    }
+
+    @Test
+    void renameConversation_shouldUpdateTitle_whenOwnedByUser() {
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = Conversation.builder().id(conversationId).user(alice).title("Lama").build();
+
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(conversationRepository.findByIdAndUser(conversationId, alice)).thenReturn(Optional.of(conversation));
+        when(conversationRepository.save(any(Conversation.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = agentService.renameConversation("alice", conversationId.toString(), "Judul Baru");
+
+        assertEquals("Judul Baru", result.getTitle());
+        verify(conversationRepository).save(argThat(c -> c.getTitle().equals("Judul Baru")));
+    }
+
+    @Test
+    void renameConversation_shouldThrow_whenNotOwnedByUser() {
+        UUID conversationId = UUID.randomUUID();
+
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(conversationRepository.findByIdAndUser(conversationId, alice)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> agentService.renameConversation("alice", conversationId.toString(), "Judul Baru"));
     }
 }
