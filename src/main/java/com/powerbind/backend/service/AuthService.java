@@ -10,6 +10,8 @@ import com.powerbind.backend.repository.RefreshTokenRepository;
 import com.powerbind.backend.repository.UserRepository;
 import com.powerbind.backend.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -88,14 +91,26 @@ public class AuthService {
         RefreshToken token = refreshTokenRepository.findByToken(request.getRefreshToken())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
 
+        // This token reuse detection is important for security — 
+        // if a refresh token is used more than once, it indicates that the token may have been compromised. 
+        // In such a case, we revoke all sessions for the user to prevent unauthorized access.
+        if (token.isRevoked()) {
+            refreshTokenRepository.deleteAllByUser(token.getUser());
+            log.warn("[Auth] Refresh token reuse terdeteksi untuk user {} — semua sesi dicabut",
+                    token.getUser().getUsername());
+            throw new IllegalArgumentException("Sesi tidak valid — silakan login ulang");
+        }
+
         if (LocalDateTime.now().isAfter(token.getExpiresAt())) {
             refreshTokenRepository.delete(token);
             throw new IllegalArgumentException("Refresh token expired — please login again");
         }
 
-        // Rotate refresh token on every use for security
-        refreshTokenRepository.delete(token);
+        // Rolling refresh token: generate a new refresh token and revoke the old one.
         String newRefreshToken = generateRefreshToken(token.getUser());
+        token.setRevoked(true);
+        refreshTokenRepository.save(token);
+
         String newAccessToken = jwtUtil.generateToken(token.getUser().getUsername());
 
         return AuthResponse.TokenPair.builder()
