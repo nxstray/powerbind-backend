@@ -18,6 +18,7 @@ import java.util.UUID;
 public class RoomService {
 
     private final RoomRepository roomRepository;
+    private final MqttPublisherService mqttPublisherService;
 
     // Get all rooms with live status
     public List<RoomResponse.Detail> getAllRooms() {
@@ -49,6 +50,23 @@ public class RoomService {
         Room room = findRoom(id);
         room.setName(request.getName());
         roomRepository.save(room);
+        return toDetail(room);
+    }
+
+    // Manual relay override — triggered from the dashboard, after the user
+    // confirms via the validation dialog on the frontend. Updates DB state
+    // immediately, then best-effort publishes the command to the ESP32 so the
+    // device isn't left out of sync with what the dashboard shows.
+    @Transactional
+    public RoomResponse.Detail setRelay(UUID id, boolean relayOn) {
+        Room room = findRoom(id);
+        room.setRelayOn(relayOn);
+        room.setNoPresenceSeconds(0);
+        room.setUpdatedAt(LocalDateTime.now());
+        room = roomRepository.save(room);
+
+        mqttPublisherService.publishRelayCommand(room.getMqttTopic(), relayOn);
+
         return toDetail(room);
     }
 
