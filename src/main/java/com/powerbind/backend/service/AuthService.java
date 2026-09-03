@@ -86,7 +86,7 @@ public class AuthService {
     }
 
     // Exchange a valid refresh token for a new access token
-    @Transactional
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public AuthResponse.TokenPair refresh(AuthRequest.Refresh request) {
         RefreshToken token = refreshTokenRepository.findByToken(request.getRefreshToken())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
