@@ -62,18 +62,39 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     private void loginAndWaitForModal() {
         driver.get(FRONTEND_URL + "/login");
-        driver.findElement(By.cssSelector("input[type='text']")).sendKeys(TEST_USERNAME);
-        driver.findElement(By.cssSelector("input[type='password']")).sendKeys(TEST_PASSWORD);
+
+        // LoginPage.vue has an entry transition (the animated "ring" decoration) —
+        // wait for the username input to actually be interactable instead of assuming
+        // it's ready the instant it exists in the DOM, otherwise sendKeys can hit it
+        // mid-transition and throw "element not interactable".
+        WebElement usernameInput = new WebDriverWait(driver, Duration.ofSeconds(10))
+                .until(ExpectedConditions.elementToBeClickable(By.cssSelector("input[type='text']")));
+        usernameInput.sendKeys(TEST_USERNAME);
+
+        WebElement passwordInput = new WebDriverWait(driver, Duration.ofSeconds(10))
+                .until(ExpectedConditions.elementToBeClickable(By.cssSelector("input[type='password']")));
+        passwordInput.sendKeys(TEST_PASSWORD);
+
         // LoginPage.vue's submit control is <input type="submit">, not a <button> —
         // SUBMIT_CONTROL (from SeleniumTestBase) matches either markup.
-        driver.findElement(SUBMIT_CONTROL).click();
+        new WebDriverWait(driver, Duration.ofSeconds(10))
+                .until(ExpectedConditions.elementToBeClickable(SUBMIT_CONTROL))
+                .click();
 
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(MODAL_TITLE));
     }
 
     private void fillForm(String current, String next, String confirm) {
-        List<WebElement> inputs = driver.findElements(By.cssSelector("input[type='password']"));
+        // Wait for all 3 password fields to exist AND be part of a fully-mounted modal —
+        // modal has a 0.15s fade-in transition, so grabbing elements the instant the
+        // title becomes visible can still race the form's own readiness.
+        List<WebElement> inputs = new WebDriverWait(driver, Duration.ofSeconds(10))
+                .until(d -> {
+                    List<WebElement> found = d.findElements(By.cssSelector("input[type='password']"));
+                    return (found.size() == 3 && found.stream().allMatch(WebElement::isDisplayed)) ? found : null;
+                });
+
         inputs.get(0).sendKeys(current);
         inputs.get(1).sendKeys(next);
         inputs.get(2).sendKeys(confirm);
@@ -82,7 +103,9 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
     private void submit() {
         // The change-password modal itself uses a real <button type="submit">, so the
         // plain button selector is correct here — this is not the LoginPage form.
-        driver.findElement(By.cssSelector("button[type='submit']")).click();
+        new WebDriverWait(driver, Duration.ofSeconds(10))
+                .until(ExpectedConditions.elementToBeClickable(By.cssSelector("button[type='submit']")))
+                .click();
     }
 
     @Severity(SeverityLevel.CRITICAL)
