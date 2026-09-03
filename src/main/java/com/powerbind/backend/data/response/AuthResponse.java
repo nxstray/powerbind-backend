@@ -19,7 +19,7 @@ public class AuthResponse {
     @AllArgsConstructor
     public static class Profile {
         private String id;
-        private String email;
+        private String username;
         private String displayName;
     }
 }
