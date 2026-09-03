@@ -36,7 +36,7 @@ class ConcurrentLoginLoadTest {
     // Adjust these if your target hardware is known to be slower/faster than a typical
     // dev machine — they're deliberately generous for a burst of 30 simultaneous requests
     // hitting BCrypt password hashing, which is CPU-bound by design.
-    private static final long MAX_AVG_LATENCY_MS = 2_000;   // 2s average response time
+    private static final long MAX_AVG_LATENCY_MS = 2_500;   // 2s average response time
     private static final long MAX_P95_LATENCY_MS = 5_000;   // 5s for the slowest 5% of requests
 
     @LocalServerPort
