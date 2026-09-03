@@ -1,5 +1,6 @@
 package com.powerbind.backend.selenium;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
@@ -16,11 +17,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // Excluded from normal `mvn test` runs via the "ui" tag — requires backend + frontend
 // already running. Run explicitly with: mvn test -Dtest=LoginPageSeleniumTest -DexcludedGroups=
+@DisplayName("UI Test (login)")
 @Tag("ui")
 class LoginPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
+    @DisplayName("TC-UI-01 Login with valid credentials redirects away from the login page")
     void login_withValidCredentials_shouldRedirectToDashboard() {
         driver.get(FRONTEND_URL + "/login");
         attachScreenshot("login-01-page-loaded");
@@ -41,6 +44,7 @@ class LoginPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-02 Login with invalid credentials shows an error message")
     void login_withInvalidCredentials_shouldShowErrorMessage() {
         driver.get(FRONTEND_URL + "/login");
 
