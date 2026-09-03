@@ -165,4 +165,99 @@ class AuthServiceTest {
         assertThrows(IllegalArgumentException.class, () -> authService.refresh(req));
         verify(refreshTokenRepository).deleteAllByUser(user);
     }
+
+    @Severity(SeverityLevel.CRITICAL)
+    @Test
+    @DisplayName("TC-U-07 Login on an account still on the default password flags mustChangePassword")
+    void login_shouldReportMustChangePassword_whenStillOnDefault() {
+        User user = User.builder()
+                .username("budi")
+                .password("encoded")
+                .mustChangePassword(true)
+                .build();
+
+        AuthRequest.Login req = new AuthRequest.Login();
+        ReflectionTestUtils.setField(req, "username", "budi");
+        ReflectionTestUtils.setField(req, "password", "default-pass");
+
+        when(userRepository.findByUsername("budi")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("default-pass", "encoded")).thenReturn(true);
+        when(jwtUtil.generateToken("budi")).thenReturn("access-token");
+
+        AuthResponse.TokenPair result = authService.login(req);
+
+        assertTrue(result.isMustChangePassword(),
+                "Login response should flag that the account is still on the default password");
+    }
+
+    @Test
+    @DisplayName("TC-U-08 Change password throws when the current password is wrong")
+    void changePassword_shouldThrow_whenCurrentPasswordIsWrong() {
+        User user = User.builder()
+                .username("budi")
+                .password("encoded")
+                .mustChangePassword(true)
+                .build();
+
+        AuthRequest.ChangePassword req = new AuthRequest.ChangePassword();
+        ReflectionTestUtils.setField(req, "currentPassword", "wrong-current");
+        ReflectionTestUtils.setField(req, "newPassword", "brand-new-password");
+
+        when(userRepository.findByUsername("budi")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-current", "encoded")).thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class, () -> authService.changePassword("budi", req));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("TC-U-09 Change password throws when the new password matches the current one")
+    void changePassword_shouldThrow_whenNewPasswordSameAsCurrent() {
+        User user = User.builder()
+                .username("budi")
+                .password("encoded")
+                .mustChangePassword(true)
+                .build();
+
+        AuthRequest.ChangePassword req = new AuthRequest.ChangePassword();
+        ReflectionTestUtils.setField(req, "currentPassword", "same-password");
+        ReflectionTestUtils.setField(req, "newPassword", "same-password");
+
+        when(userRepository.findByUsername("budi")).thenReturn(Optional.of(user));
+        // both fields hold the same raw value, so it matches the stored hash either way
+        when(passwordEncoder.matches("same-password", "encoded")).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class, () -> authService.changePassword("budi", req));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Severity(SeverityLevel.CRITICAL)
+    @Test
+    @DisplayName("TC-U-10 Change password succeeds, clears the flag, and revokes existing sessions")
+    void changePassword_shouldSucceed_clearFlagAndRevokeExistingSessions() {
+        User user = User.builder()
+                .username("budi")
+                .password("old-encoded")
+                .mustChangePassword(true)
+                .build();
+
+        AuthRequest.ChangePassword req = new AuthRequest.ChangePassword();
+        ReflectionTestUtils.setField(req, "currentPassword", "default-pass");
+        ReflectionTestUtils.setField(req, "newPassword", "brand-new-password");
+
+        when(userRepository.findByUsername("budi")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("default-pass", "old-encoded")).thenReturn(true);
+        when(passwordEncoder.matches("brand-new-password", "old-encoded")).thenReturn(false);
+        when(passwordEncoder.encode("brand-new-password")).thenReturn("new-encoded");
+        when(userRepository.save(any())).thenReturn(user);
+
+        AuthResponse.Profile result = authService.changePassword("budi", req);
+
+        assertFalse(result.isMustChangePassword(),
+                "Flag should be cleared after a successful change");
+        assertEquals("new-encoded", user.getPassword());
+        assertFalse(user.isMustChangePassword());
+        // old (possibly shared) password is dead now — every existing session must re-login
+        verify(refreshTokenRepository).deleteAllByUser(user);
+    }
 }
