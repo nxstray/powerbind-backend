@@ -9,7 +9,10 @@ import com.powerbind.backend.repository.RefreshTokenRepository;
 import com.powerbind.backend.repository.UserRepository;
 import com.powerbind.backend.security.JwtUtil;
 import com.powerbind.backend.service.AuthService;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -24,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+@DisplayName("Unit Test (auth)")
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
@@ -42,6 +46,7 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("TC-U-01 Login with wrong password throws and records a failed attempt")
     void login_shouldThrow_whenPasswordIsWrong() {
         User user = User.builder()
                 .username("admin")
@@ -60,6 +65,7 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("TC-U-02 Login with unknown username throws invalid credentials")
     void login_shouldThrow_whenUsernameNotFound() {
         AuthRequest.Login req = new AuthRequest.Login();
         ReflectionTestUtils.setField(req, "username", "notexist");
@@ -70,7 +76,9 @@ class AuthServiceTest {
         assertThrows(IllegalArgumentException.class, () -> authService.login(req));
     }
 
+    @Severity(SeverityLevel.CRITICAL)
     @Test
+    @DisplayName("TC-U-03 Login locks the account after the max failed attempts")
     void login_shouldLockAccount_afterMaxFailedAttempts() {
         User user = User.builder()
                 .username("admin")
@@ -89,7 +97,9 @@ class AuthServiceTest {
         assertThrows(AccountLockedException.class, () -> authService.login(req));
     }
 
+    @Severity(SeverityLevel.CRITICAL)
     @Test
+    @DisplayName("TC-U-04 Refresh with a valid token rotates it and returns a new token pair")
     void refresh_withValidToken_shouldRotateAndReturnNewPair() {
         User user = User.builder().username("admin").build();
         RefreshToken oldToken = RefreshToken.builder()
@@ -116,6 +126,7 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("TC-U-05 Refresh with an expired token throws and deletes the token")
     void refresh_withExpiredToken_shouldThrowAndDeleteToken() {
         User user = User.builder().username("admin").build();
         RefreshToken expired = RefreshToken.builder()
@@ -134,7 +145,9 @@ class AuthServiceTest {
         verify(refreshTokenRepository).delete(expired);
     }
 
+    @Severity(SeverityLevel.CRITICAL)
     @Test
+    @DisplayName("TC-U-06 Refresh with an already-revoked token detects reuse and revokes all sessions")
     void refresh_withAlreadyRevokedToken_shouldDetectReuseAndRevokeAllSessions() {
         User user = User.builder().username("admin").build();
         RefreshToken reused = RefreshToken.builder()
