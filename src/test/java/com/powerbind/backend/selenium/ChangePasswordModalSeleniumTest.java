@@ -64,7 +64,9 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
         driver.get(FRONTEND_URL + "/login");
         driver.findElement(By.cssSelector("input[type='text']")).sendKeys(TEST_USERNAME);
         driver.findElement(By.cssSelector("input[type='password']")).sendKeys(TEST_PASSWORD);
-        driver.findElement(By.cssSelector("button[type='submit']")).click();
+        // LoginPage.vue's submit control is <input type="submit">, not a <button> —
+        // SUBMIT_CONTROL (from SeleniumTestBase) matches either markup.
+        driver.findElement(SUBMIT_CONTROL).click();
 
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(MODAL_TITLE));
@@ -78,6 +80,8 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
     }
 
     private void submit() {
+        // The change-password modal itself uses a real <button type="submit">, so the
+        // plain button selector is correct here — this is not the LoginPage form.
         driver.findElement(By.cssSelector("button[type='submit']")).click();
     }
 
