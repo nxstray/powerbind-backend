@@ -29,9 +29,16 @@ public class MqttMessageHandler {
         String topic = (String) message.getHeaders().get("mqtt_receivedTopic");
         String payload = message.getPayload().toString().trim();
 
-        log.debug("[MQTT] Received on topic {}: {}", topic, payload);
-
         if (topic == null) return;
+
+        // Pisahkan log khusus agar tidak tercampur dengan log debug MQTT biasa
+        if (topic.startsWith("smart-home/logs")) {
+            String roomNode = topic.substring(topic.lastIndexOf("/") + 1);
+            log.info("[IOT-{}] {}", roomNode.toUpperCase(), payload);
+            return; // Selesai diproses
+        }
+
+        log.debug("[MQTT] Received on topic {}: {}", topic, payload);
 
         if (topic.startsWith(presenceTopic.replace("#", "").replace("+", ""))) {
             handlePresence(topic, payload);
