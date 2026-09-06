@@ -16,15 +16,22 @@ Built with **Java 17 + Spring Boot 3.4.5 (Maven)**.
 | **Relay / room state** | Keeps per-room state in PostgreSQL; a watchdog (`RoomTimeoutService`) auto-marks rooms *offline* after ~30 s without MQTT data |
 | **Real-time updates** | Broadcasts presence & power changes to the frontend over **WebSocket STOMP** (`/ws` → `/topic/presence`, `/topic/power`) |
 | **AI energy advisor** | Groq-powered agent: streaming text chat (SSE), image queries (vision), voice input (Whisper transcription), and document Q&A (PDF/DOCX/TXT) — all persisted into **per-user conversation threads** with long-term memory |
-| **Auth & security** | JWT access + refresh tokens, Redis sliding-window rate limiting (30 req/60 s), login lockout (5 failed attempts → 10 min) |
+| **Auth & security** | JWT access + refresh tokens with a role claim (`USER`/`ADMIN`), Redis sliding-window rate limiting (30 req/60 s), login lockout (5 failed attempts → 10 min) |
+| **Admin — ERD & logs** | Admin-only API: auto-generated ERD schema (`/api/admin/erd`, reflects the live JPA entities) and the merged Backend/Frontend/IoT log stream proxied from Loki (`/api/admin/logs`) |
 | **Observability** | Logs ship to **Loki**, dashboards in **Grafana** (see `docker-compose.yml`) |
 
-```
- ESP32 sensors ──MQTT──▶ ┌─────────────────────────────┐ ──WebSocket STOMP──▶ Vue 3 frontend
- (presence / PZEM-004T)  │   Powerbind Backend :8045   │ ──REST /api/**─────▶ Vue 3 frontend
-                         │ Spring Boot • JWT • Redis   │ ──SSE streaming────▶ AI chat UI
-                         │ PostgreSQL • InfluxDB • Groq│
-                         └─────────────────────────────┘
+```mermaid
+flowchart LR
+    ESP["ESP32 sensors<br>(presence / PZEM-004T)"]
+    BE["Powerbind Backend :8045<br>Spring Boot • JWT • Redis<br>PostgreSQL • InfluxDB • Groq"]
+    FE["Powerbind Frontend :5173<br>Vue 3 • Pinia"]
+    LOKI["Loki :3100<br>log aggregation (docker-compose)"]
+
+    ESP -- "MQTT smart-home/presence/#<br>smart-home/power/#" --> BE
+    BE -- "REST /api/**" --> FE
+    BE -- "SSE /api/agent (streaming AI chat)" --> FE
+    BE -- "WebSocket STOMP /ws<br>(/topic/presence, /topic/power)" --> FE
+    BE -- "ships logs • admin proxy /api/admin/logs" --> LOKI
 ```
 
 ---
@@ -93,13 +100,14 @@ cp .env.example .env   # then fill in the real values
 | `CORS_ALLOWED_ORIGINS` | — | `http://localhost:5173` | Frontend origin |
 | `APP_DEFAULT_USER_USERNAME` / `_PASSWORD` | — | `admin` / *(none)* | Initial admin account, created on first startup |
 | `APP_FAMILY_USERS` | — | — | Multiple accounts, overrides the default admin. Format: `user:pass:Display;user2:pass2:Display2` |
+| `LOKI_URL` | — | `http://localhost:3100` | Loki base URL for the admin log proxy (`/api/admin/logs`) |
 
-> **Accounts:** there is **no self-registration**. Users are seeded on startup by `DataInitializer` from `.env` (passwords stored bcrypt-hashed).
+> **Accounts:** there is **no self-registration**. Users are seeded on startup by `DataInitializer` from `.env` (passwords stored bcrypt-hashed). The single default user becomes **ADMIN** (gets the ERD/Log pages); with `APP_FAMILY_USERS` everyone starts as **USER** — promote someone with `UPDATE users SET role = 'ADMIN' WHERE username = '...';`
 
 ### Database
 
 1. Create a database named `powerbind` in PostgreSQL.
-2. Schema is managed by Flyway SQL migrations in `src/main/resources/db/migration` (`V1` … `V7`).
+2. Schema is managed by Flyway SQL migrations in `src/main/resources/db/migration` (`V1` … `V10`).
 3. JPA is set to `ddl-auto=validate` — the schema must exist before startup.
 
 ---
@@ -231,10 +239,25 @@ ESP32 sensors publish to:
 | `smart-home/presence/#` | room presence events |
 | `smart-home/power/#` | PZEM-004T readings (Watts, Voltage, Current, kWh) |
 
+### 8. Admin — ERD & logs (ADMIN only)
+
+Both endpoints are gated by `hasRole('ADMIN')` — the role is embedded in the JWT at login and turned into a `ROLE_ADMIN` authority by `JwtAuthFilter`.
+
+```bash
+# Auto-generated entity schema (tables, columns, relations) — always mirrors the live JPA entities
+curl http://localhost:8045/api/admin/erd -H "Authorization: Bearer $TOKEN"
+
+# Merged Backend/Frontend/IoT log stream, proxied from Loki (Loki's URL never reaches the browser)
+curl "http://localhost:8045/api/admin/logs?source=ALL&since=1h&limit=300" -H "Authorization: Bearer $TOKEN"
+#   source: ALL | BACKEND | FRONTEND | IOT      level: ERROR | WARN | INFO | DEBUG
+#   search: free-text line filter               since: 15m / 1h / 6h / 24h
+```
+
 ### Security defaults
 
 - Rate limit: **30 requests / 60 s** per client (Redis sliding window)
 - Login lockout: **5 failed attempts → 10 minutes**
+- Role-based access: `/api/admin/**` requires the `ADMIN` role (role claim in the JWT)
 
 ---
 
@@ -243,11 +266,12 @@ ESP32 sensors publish to:
 ```
 src/main/java/com/powerbind/backend/
 ├── config/          # Security, MQTT, Redis, InfluxDB, WebSocket, DataInitializer (user seeding)
-├── controller/      # REST endpoints: /api/auth, /api/agent, /api/dashboard, /api/rooms, /api/logs
+├── controller/      # REST endpoints: /api/auth, /api/agent, /api/dashboard, /api/rooms, /api/logs,
+│                    #   /api/admin (ERD schema + Loki log proxy — ADMIN only)
 ├── service/         # Business logic: AuthService, AgentService, GroqService, MqttMessageHandler,
 │                    #   InfluxDBService, MemoryService, RoomTimeoutService (watchdog)
 ├── repository/      # Spring Data JPA repositories
-├── model/           # JPA entities: User, Room, ChatMessage, Conversation, RefreshToken, UserMemory
+├── model/           # JPA entities: User (+ Role enum), Room, ChatMessage, Conversation, RefreshToken, UserMemory
 ├── security/        # JWT filter & utilities
 └── data/            # request/ + response/ DTOs
 src/test/java/       # unit/ functional/ performance/ selenium/ cucumber/
