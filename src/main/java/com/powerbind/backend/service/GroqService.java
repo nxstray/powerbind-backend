@@ -18,7 +18,8 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.Map;
 
-// Handles all Groq API calls — chat streaming, vision, and Whisper transcription
+// Handles all Groq API calls — chat streaming, vision, Whisper transcription, and
+// one-shot JSON completions (used for background memory extraction)
 @Slf4j
 @Service
 public class GroqService {
@@ -131,6 +132,42 @@ public class GroqService {
         } catch (Exception e) {
             log.error("[Groq Whisper] Transcription error: {}", e.getMessage());
             return "";
+        }
+    }
+
+    // One-shot (non-streaming) completion forced into JSON output — used for background
+    // tasks like memory extraction where we need a structured, parseable result rather
+    // than a token stream. Returns the raw JSON string from the assistant, or null on failure.
+    public String completeJson(String systemPrompt, String userContent) {
+        List<Map<String, Object>> messages = List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userContent)
+        );
+
+        Map<String, Object> body = Map.of(
+                "model", model,
+                "messages", messages,
+                "max_tokens", 400,
+                "temperature", 0.2,
+                "stream", false,
+                "response_format", Map.of("type", "json_object")
+        );
+
+        try {
+            String response = webClient.post()
+                    .uri("/chat/completions")
+                    .bodyValue(body)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (response == null) return null;
+            JsonNode content = objectMapper.readTree(response)
+                    .path("choices").path(0).path("message").path("content");
+            return content.isTextual() ? content.asText() : null;
+        } catch (Exception e) {
+            log.error("[Groq] JSON completion error: {}", e.getMessage());
+            return null;
         }
     }
 
