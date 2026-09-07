@@ -2,6 +2,8 @@ package com.powerbind.backend.controller;
 
 import com.powerbind.backend.data.ApiResponse;
 import com.powerbind.backend.data.request.ErdExplainRequest;
+import com.powerbind.backend.service.AdminErdCodeService;
+import com.powerbind.backend.service.AdminErdDataService;
 import com.powerbind.backend.service.AdminErdExplainService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,9 +17,11 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
@@ -41,6 +45,8 @@ public class AdminErdController {
 
     private static final String MODEL_PACKAGE = "com.powerbind.backend.model";
 
+    private final AdminErdCodeService codeService;
+    private final AdminErdDataService dataService;
     private final AdminErdExplainService explainService;
 
     @GetMapping
@@ -97,6 +103,26 @@ public class AdminErdController {
     @Operation(summary = "Stream an AI explanation of what a PK/FK column relates to")
     public Flux<String> explainColumn(@Valid @RequestBody ErdExplainRequest.Column request) {
         return explainService.explainColumn(request);
+    }
+
+    // Reconstructed Java entity skeleton for one table (reflection-based — works
+    // from a deployed JAR where .java sources are not packaged)
+    @GetMapping("/{table}/code")
+    @Operation(summary = "Reconstructed Java entity code for one table")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCode(@PathVariable("table") String table) {
+        return ResponseEntity.ok(ApiResponse.ok(codeService.reconstruct(table)));
+    }
+
+    // Read-only paginated preview of a table's contents. The table name is
+    // whitelisted against the live entity scan and sensitive columns are masked
+    // server-side (see AdminErdDataService).
+    @GetMapping("/{table}/rows")
+    @Operation(summary = "Read-only paginated preview of a table's rows")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getRows(
+            @PathVariable("table") String table,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(dataService.getRows(table, page, size)));
     }
 
     private List<Class<?>> scanEntities() {
