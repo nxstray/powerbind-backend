@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -49,11 +50,23 @@ public class GroqService {
                 .build();
     }
 
+    // Applied globally so that any AI page (Gemono chat, vision, ERD explain, or
+    // any future feature routed through streamChat/streamVisionChat) can never
+    // reply with emoji, regardless of what each page's own system prompt says.
+    private static final String NO_EMOJI_INSTRUCTION =
+            "Jangan gunakan emoji sama sekali dalam jawabanmu, dalam kondisi apa pun.";
+
+    private List<Map<String, Object>> withNoEmojiInstruction(List<Map<String, Object>> messages) {
+        List<Map<String, Object>> result = new ArrayList<>(messages);
+        result.add(Map.of("role", "system", "content", NO_EMOJI_INSTRUCTION));
+        return result;
+    }
+
     // stream chat completion — text only
     public Flux<String> streamChat(List<Map<String, Object>> messages) {
         Map<String, Object> body = Map.of(
                 "model", model,
-                "messages", messages,
+                "messages", withNoEmojiInstruction(messages),
                 "max_tokens", maxTokens,
                 "stream", true,
                 "temperature", 0.7
@@ -88,7 +101,7 @@ public class GroqService {
 
         Map<String, Object> body = Map.of(
                 "model", visionModel,
-                "messages", messages,
+                "messages", withNoEmojiInstruction(messages),
                 "max_tokens", maxTokens,
                 "stream", true
         );
