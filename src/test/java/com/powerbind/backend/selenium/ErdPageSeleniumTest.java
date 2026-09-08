@@ -321,7 +321,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
         driver.findElement(By.xpath("//aside//button[.//span[text()='Dashboard']]")).click();
         new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Overview']")));
+                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Ringkasan']")));
         attachScreenshot("erd-20-navigated-to-dashboard");
     }
 
