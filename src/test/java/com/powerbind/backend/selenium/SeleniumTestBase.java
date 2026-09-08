@@ -47,6 +47,12 @@ public abstract class SeleniumTestBase {
     private static final By CHANGE_PASSWORD_MODAL_TITLE =
             By.xpath("//h3[text()='Ganti password default']");
 
+    // LoginPage.vue's submit control is an <input type="submit"> (styled as a button,
+    // no real <button> element), while every other form in the app (change-password
+    // modal, confirm dialogs, etc.) uses a real <button type="submit">. Match both so
+    // this one selector works regardless of which markup a given screen uses.
+    protected static final By SUBMIT_CONTROL = By.cssSelector("button[type='submit'], input[type='submit']");
+
     protected WebDriver driver;
 
     @BeforeEach
@@ -100,7 +106,7 @@ public abstract class SeleniumTestBase {
         driver.get(FRONTEND_URL + "/login");
         driver.findElement(By.cssSelector("input[type='text']")).sendKeys(TEST_USERNAME);
         driver.findElement(By.cssSelector("input[type='password']")).sendKeys(TEST_PASSWORD);
-        driver.findElement(By.cssSelector("button[type='submit']")).click();
+        driver.findElement(SUBMIT_CONTROL).click();
 
         // Dashboard route path is "/" (root), not "/dashboard" — wait for the login
         // page to disappear instead of checking for a URL fragment that doesn't exist.
