@@ -32,7 +32,9 @@ class LoginPageSeleniumTest extends SeleniumTestBase {
         driver.findElement(By.cssSelector("input[type='password']")).sendKeys(TEST_PASSWORD);
         attachScreenshot("login-02-form-filled");
 
-        driver.findElement(By.cssSelector("button[type='submit']")).click();
+        // LoginPage.vue's submit control is <input type="submit">, not a <button> —
+        // SUBMIT_CONTROL (from SeleniumTestBase) matches either markup.
+        driver.findElement(SUBMIT_CONTROL).click();
 
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.not(ExpectedConditions.urlContains("/login")));
@@ -50,7 +52,7 @@ class LoginPageSeleniumTest extends SeleniumTestBase {
 
         driver.findElement(By.cssSelector("input[type='text']")).sendKeys(TEST_USERNAME);
         driver.findElement(By.cssSelector("input[type='password']")).sendKeys("wrong-password-xyz");
-        driver.findElement(By.cssSelector("button[type='submit']")).click();
+        driver.findElement(SUBMIT_CONTROL).click();
 
         // errorMsg is rendered as a <p class="text-sm text-red-500"> right after a failed attempt
         WebElement errorMsg = new WebDriverWait(driver, Duration.ofSeconds(10))
