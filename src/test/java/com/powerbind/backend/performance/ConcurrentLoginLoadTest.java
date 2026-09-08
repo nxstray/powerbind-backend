@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // Simulates 30 family/staff members logging in at the exact same moment —
 // verifies the auth endpoint holds up under concurrent load, and how fast.
+@DisplayName("Performance Test (load)")
 @Tag("performance")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -57,6 +58,7 @@ class ConcurrentLoginLoadTest {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-P-02 30 concurrent logins all succeed or rate-limit gracefully within latency thresholds")
     void thirtyConcurrentLogins_shouldAllSucceedOrRateLimitGracefully() throws InterruptedException {
         ExecutorService pool = Executors.newFixedThreadPool(CONCURRENT_USERS);
         CountDownLatch startGate = new CountDownLatch(1);
