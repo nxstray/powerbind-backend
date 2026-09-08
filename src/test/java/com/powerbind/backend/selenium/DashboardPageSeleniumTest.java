@@ -1,6 +1,7 @@
 package com.powerbind.backend.selenium;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
@@ -14,6 +15,7 @@ import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisplayName("UI Test (dashboard)")
 @Tag("ui")
 class DashboardPageSeleniumTest extends SeleniumTestBase {
 
@@ -24,6 +26,7 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-03 Dashboard Overview renders stat cards, power chart and energy donut")
     void dashboard_shouldDisplayOverviewAndStatCards() {
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Overview']")));
@@ -39,6 +42,7 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-04 Sidebar button navigates to the Agent page")
     void dashboard_shouldNavigateToAgentPageViaSidebar() {
         driver.findElement(By.xpath("//button[.//span[text()='Gemono']]")).click();
 
@@ -52,14 +56,19 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-05 Logout redirects back to the login page")
     void dashboard_logout_shouldRedirectToLogin() {
+        // Clicking Logout only opens the confirmation ConfirmDialog now — it doesn't
+        // log out immediately. The actual logout fires from the dialog's confirm button.
         driver.findElement(By.cssSelector("button[title='Logout']")).click();
+
+        driver.findElement(By.xpath("//button[text()='Keluar']")).click();
 
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.urlContains("/login"));
         attachScreenshot("dashboard-03-logged-out");
 
         assertTrue(driver.getCurrentUrl().contains("/login"),
-                "Logout should redirect back to the login page");
+                "Confirming logout should redirect back to the login page");
     }
 }
