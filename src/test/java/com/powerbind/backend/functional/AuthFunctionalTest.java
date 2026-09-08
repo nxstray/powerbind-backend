@@ -89,4 +89,57 @@ class AuthFunctionalTest {
         assertEquals(200, res.getStatusCode());
         assertEquals(USERNAME, res.jsonPath().getString("data.username"));
     }
+
+    @Test
+    @DisplayName("TC-F-09 Refresh with a valid refresh token returns a new token pair")
+    void refresh_withValidToken_shouldReturnNewPair() {
+        String refreshToken = RestAssured.given()
+                .contentType("application/json")
+                .body(Map.of("username", USERNAME, "password", PASSWORD))
+                .post("http://localhost:" + port + "/api/auth/login")
+                .jsonPath().getString("data.refreshToken");
+
+        var res = RestAssured.given()
+                .contentType("application/json")
+                .body(Map.of("refreshToken", refreshToken))
+                .post("http://localhost:" + port + "/api/auth/refresh");
+
+        assertEquals(200, res.getStatusCode());
+        assertNotNull(res.jsonPath().getString("data.accessToken"));
+        assertNotEquals(refreshToken, res.jsonPath().getString("data.refreshToken"));
+    }
+
+    @Test
+    @DisplayName("TC-F-10 Reusing an already-rotated refresh token is rejected and kills all sessions")
+    void refresh_withReusedToken_shouldBeRejectedAndRevokeAllSessions() {
+        String originalRefreshToken = RestAssured.given()
+                .contentType("application/json")
+                .body(Map.of("username", USERNAME, "password", PASSWORD))
+                .post("http://localhost:" + port + "/api/auth/login")
+                .jsonPath().getString("data.refreshToken");
+
+        // First refresh — legitimate, rotates the token
+        String rotatedRefreshToken = RestAssured.given()
+                .contentType("application/json")
+                .body(Map.of("refreshToken", originalRefreshToken))
+                .post("http://localhost:" + port + "/api/auth/refresh")
+                .jsonPath().getString("data.refreshToken");
+
+        // Reusing the original (now-revoked) token — simulates a stolen token being used
+        int reuseStatus = RestAssured.given()
+                .contentType("application/json")
+                .body(Map.of("refreshToken", originalRefreshToken))
+                .post("http://localhost:" + port + "/api/auth/refresh")
+                .getStatusCode();
+        assertEquals(400, reuseStatus);
+
+        // The legitimate rotated token must ALSO be dead now — proves all sessions were killed,
+        // not just the reused one
+        int rotatedTokenStatus = RestAssured.given()
+                .contentType("application/json")
+                .body(Map.of("refreshToken", rotatedRefreshToken))
+                .post("http://localhost:" + port + "/api/auth/refresh")
+                .getStatusCode();
+        assertEquals(400, rotatedTokenStatus);
+    }
 }
