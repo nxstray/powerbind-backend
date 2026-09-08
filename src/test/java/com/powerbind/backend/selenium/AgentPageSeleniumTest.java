@@ -1,6 +1,7 @@
 package com.powerbind.backend.selenium;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
@@ -14,6 +15,7 @@ import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisplayName("UI Test (agent)")
 @Tag("ui")
 class AgentPageSeleniumTest extends SeleniumTestBase {
 
@@ -26,6 +28,7 @@ class AgentPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-06 Agent page shows a personalized greeting")
     void agentPage_shouldShowDynamicGreeting() {
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h2[contains(text(),'Halo,')]")));
@@ -38,6 +41,7 @@ class AgentPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-07 Sent message appears as a user chat bubble")
     void agentPage_sendingMessage_shouldAppearAsUserBubble() {
         String message = "Berapa pemakaian energi hari ini?";
 
