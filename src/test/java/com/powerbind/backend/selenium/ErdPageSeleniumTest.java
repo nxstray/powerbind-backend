@@ -241,7 +241,10 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
                 .until(ExpectedConditions.visibilityOfElementLocated(EXPLAIN_PANEL));
         String header = panel.getText();
         assertTrue(header.contains("·"), "Panel header should show '<column> · <table>'");
-        assertTrue(header.contains("Primary key") || header.contains("Foreign key"),
+        // The badge is styled with CSS `uppercase`, so the rendered text Selenium
+        // reads back is "PRIMARY KEY"/"FOREIGN KEY" — compare case-insensitively.
+        String headerLower = header.toLowerCase();
+        assertTrue(headerLower.contains("primary key") || headerLower.contains("foreign key"),
                 "Panel badge should classify the column kind, got: " + header);
         // The body streams from Groq — its content depends on the API key, so only the
         // three known UI states are asserted (streaming text / loading / error + retry)
