@@ -31,6 +31,11 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     private static final String TEMP_PASSWORD = "Temp-Selenium-Pass-1!";
     private static final By MODAL_TITLE = By.xpath("//h3[text()='Ganti password default']");
+    // The Logout button is wrapped in AppTooltip now (tooltip renders as a hover
+    // <span>, not a native title attribute), so it must be found via that sibling
+    // span's text instead of the old button[title='Logout'] selector.
+    private static final By LOGOUT_BUTTON = By.xpath(
+            "//div[contains(@class,'group/tooltip')][.//span[normalize-space()='Logout']]//button");
 
     // Only true for the one test that actually completes the change — lets @AfterEach
     // restore the real password without probing the account with a doomed login attempt
@@ -130,7 +135,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
         // Dashboard content renders underneath, but the modal's fixed full-screen backdrop
         // intercepts any click before it reaches the page behind it.
         assertThrows(ElementClickInterceptedException.class,
-                () -> driver.findElement(By.cssSelector("button[title='Logout']")).click(),
+                () -> driver.findElement(LOGOUT_BUTTON).click(),
                 "Clicks on the dashboard behind the modal should be intercepted");
     }
 
@@ -177,6 +182,6 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
         attachScreenshot("changepw-04-modal-closed");
 
         new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Overview']")));
+                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Ringkasan']")));
     }
 }
