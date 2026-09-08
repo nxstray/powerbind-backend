@@ -8,6 +8,7 @@ import io.qameta.allure.SeverityLevel;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // Performance test — excluded from normal test runs via maven-surefire excludedGroups
+@DisplayName("Performance Test (login)")
 @Tag("performance")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -45,6 +47,7 @@ class LoginPerformanceTest {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-P-01 Login endpoint responds in under 500 ms")
     void loginEndpoint_shouldRespondUnder500ms() {
         long start = System.currentTimeMillis();
 
