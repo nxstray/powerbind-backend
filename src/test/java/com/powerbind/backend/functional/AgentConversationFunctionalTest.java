@@ -161,4 +161,34 @@ class AgentConversationFunctionalTest {
         int status = RestAssured.get("http://localhost:" + port + "/api/agent/conversations").getStatusCode();
         assertTrue(status == 401 || status == 403, "Expected 401/403, got " + status);
     }
+
+    @Test
+    @DisplayName("TC-F-06 Renaming own conversation updates the title")
+    void renameConversation_shouldUpdateTitle_whenOwner() {
+        String aliceToken = loginAndGetToken("hist_alice");
+
+        var res = RestAssured.given()
+                .header("Authorization", "Bearer " + aliceToken)
+                .contentType("application/json")
+                .body(Map.of("title", "Judul Baru Alice"))
+                .patch("http://localhost:" + port + "/api/agent/conversations/" + aliceConversation.getId());
+
+        assertEquals(200, res.getStatusCode());
+        assertEquals("Judul Baru Alice", res.jsonPath().getString("data.title"));
+    }
+
+    @Test
+    @DisplayName("TC-F-07 Renaming another user's conversation is rejected")
+    void renameConversation_shouldBeRejected_whenNotOwner() {
+        String bobToken = loginAndGetToken("hist_bob");
+
+        int status = RestAssured.given()
+                .header("Authorization", "Bearer " + bobToken)
+                .contentType("application/json")
+                .body(Map.of("title", "Hijack"))
+                .patch("http://localhost:" + port + "/api/agent/conversations/" + aliceConversation.getId())
+                .getStatusCode();
+
+        assertTrue(status == 404 || status == 403, "Expected 404/403, got " + status);
+    }
 }
