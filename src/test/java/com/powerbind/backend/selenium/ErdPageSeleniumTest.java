@@ -267,8 +267,10 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
         WebElement panel = new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(DATA_PANEL));
-        assertTrue(panel.getText().contains("Pilih tabel"),
-                "Data panel should open with its table dropdown showing the placeholder");
+        String initialText = panel.getText();
+        attachScreenshot("erd-13b-data-panel-just-opened"); // diagnostic — captured regardless of pass/fail
+        assertTrue(initialText.contains("Pilih tabel"),
+                "Data panel should open with its table dropdown showing the placeholder, got: " + initialText);
 
         panel.findElement(By.xpath(".//button[contains(normalize-space(),'Pilih tabel')]")).click();
         panel.findElement(By.xpath(".//div[contains(@class,'w-56')]//button[normalize-space()='users']")).click();
