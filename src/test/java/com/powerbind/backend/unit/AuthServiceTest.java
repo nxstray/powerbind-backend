@@ -22,6 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -113,7 +114,7 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(req, "refreshToken", "old-token");
 
         when(refreshTokenRepository.findByToken("old-token")).thenReturn(Optional.of(oldToken));
-        when(jwtUtil.generateToken("admin")).thenReturn("new-access-token");
+        when(jwtUtil.generateToken("admin", "USER")).thenReturn("new-access-token");
 
         AuthResponse.TokenPair result = authService.refresh(req);
 
@@ -182,7 +183,7 @@ class AuthServiceTest {
 
         when(userRepository.findByUsername("budi")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("default-pass", "encoded")).thenReturn(true);
-        when(jwtUtil.generateToken("budi")).thenReturn("access-token");
+        when(jwtUtil.generateToken("budi", "USER")).thenReturn("access-token");
 
         AuthResponse.TokenPair result = authService.login(req);
 
@@ -236,6 +237,7 @@ class AuthServiceTest {
     @DisplayName("TC-U-10 Change password succeeds, clears the flag, and revokes existing sessions")
     void changePassword_shouldSucceed_clearFlagAndRevokeExistingSessions() {
         User user = User.builder()
+                .id(UUID.randomUUID()) // toProfile() calls user.getId().toString() — must not be null
                 .username("budi")
                 .password("old-encoded")
                 .mustChangePassword(true)
