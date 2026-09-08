@@ -19,6 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("ui")
 class DashboardPageSeleniumTest extends SeleniumTestBase {
 
+    // The Logout button is wrapped in AppTooltip now (tooltip renders as a hover
+    // <span>, not a native title attribute), so it must be found via that sibling
+    // span's text instead of the old button[title='Logout'] selector.
+    private static final By LOGOUT_BUTTON = By.xpath(
+            "//div[contains(@class,'group/tooltip')][.//span[normalize-space()='Logout']]//button");
+
     @BeforeEach
     void goToDashboard() {
         loginAsTestUser();
@@ -29,15 +35,16 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
     @DisplayName("TC-UI-03 Dashboard Overview renders stat cards, power chart and energy donut")
     void dashboard_shouldDisplayOverviewAndStatCards() {
         new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Overview']")));
+                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Ringkasan']")));
         attachScreenshot("dashboard-01-overview-loaded");
 
+        // Dashboard copy is fully localized to Indonesian now.
         String pageSource = driver.getPageSource();
-        assertTrue(pageSource.contains("Rooms"), "Should show Rooms stat card");
-        assertTrue(pageSource.contains("Occupied"), "Should show Occupied stat card");
-        assertTrue(pageSource.contains("Devices"), "Should show Devices stat card");
-        assertTrue(pageSource.contains("Power Usage"), "Should show Power Usage chart section");
-        assertTrue(pageSource.contains("Today's Energy"), "Should show Today's Energy donut section");
+        assertTrue(pageSource.contains("Ruangan"), "Should show Ruangan (Rooms) stat card");
+        assertTrue(pageSource.contains("Terisi"), "Should show Terisi (Occupied) stat card");
+        assertTrue(pageSource.contains("Perangkat"), "Should show Perangkat (Devices) stat card");
+        assertTrue(pageSource.contains("Pemakaian Daya"), "Should show Pemakaian Daya chart section");
+        assertTrue(pageSource.contains("Energi Hari Ini"), "Should show Energi Hari Ini donut section");
     }
 
     @Severity(SeverityLevel.NORMAL)
@@ -60,7 +67,7 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
     void dashboard_logout_shouldRedirectToLogin() {
         // Clicking Logout only opens the confirmation ConfirmDialog now — it doesn't
         // log out immediately. The actual logout fires from the dialog's confirm button.
-        driver.findElement(By.cssSelector("button[title='Logout']")).click();
+        driver.findElement(LOGOUT_BUTTON).click();
 
         driver.findElement(By.xpath("//button[text()='Keluar']")).click();
 
