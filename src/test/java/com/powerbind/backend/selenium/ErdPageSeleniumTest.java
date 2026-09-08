@@ -265,12 +265,20 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
     void erd_dataOutputPanel_shouldPreviewTableRows() {
         driver.findElement(DATA_OUTPUT_TAB).click();
 
+        // Don't just wait for the container to become "visible" — its height
+        // animates in via a 300ms CSS transition (h-0 -> h-80) and the child is
+        // overflow-hidden, so the container reports non-zero size (and thus
+        // "visible") well before the placeholder text is actually un-clipped.
+        // Poll on the rendered text itself so this naturally waits out the
+        // transition instead of racing it.
         WebElement panel = new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(ExpectedConditions.visibilityOfElementLocated(DATA_PANEL));
-        String initialText = panel.getText();
-        attachScreenshot("erd-13b-data-panel-just-opened"); // diagnostic — captured regardless of pass/fail
-        assertTrue(initialText.contains("Pilih tabel"),
-                "Data panel should open with its table dropdown showing the placeholder, got: " + initialText);
+                .until(d -> {
+                    List<WebElement> els = d.findElements(DATA_PANEL);
+                    if (els.isEmpty()) return null;
+                    WebElement el = els.get(0);
+                    return el.getText().contains("Pilih tabel") ? el : null;
+                });
+        attachScreenshot("erd-13b-data-panel-just-opened");
 
         panel.findElement(By.xpath(".//button[contains(normalize-space(),'Pilih tabel')]")).click();
         panel.findElement(By.xpath(".//div[contains(@class,'w-56')]//button[normalize-space()='users']")).click();
