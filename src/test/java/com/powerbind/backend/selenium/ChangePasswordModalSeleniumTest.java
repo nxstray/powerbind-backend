@@ -5,6 +5,7 @@ import io.qameta.allure.SeverityLevel;
 import io.restassured.RestAssured;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 // state directly in the database (see SeleniumTestBase.setMustChangePassword) so this
 // suite is repeatable regardless of whether the account already completed the flow —
 // there is no API to re-arm the flag, only to clear it, by design.
+@DisplayName("UI Test (change password)")
 @Tag("ui")
 class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
@@ -110,6 +112,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
+    @DisplayName("TC-UI-08 Change password modal appears right after login when the account is still on the default password")
     void modal_shouldAppear_whenAccountStillOnDefaultPassword() {
         loginAndWaitForModal();
         attachScreenshot("changepw-01-modal-shown");
@@ -120,6 +123,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-09 Dashboard behind the modal is blocked until the change is completed")
     void modal_shouldBlockAccessToDashboard_untilCompleted() {
         loginAndWaitForModal();
 
@@ -132,6 +136,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-10 Mismatched confirmation shows an error and keeps the modal open")
     void modal_shouldShowError_whenConfirmationDoesNotMatch() {
         loginAndWaitForModal();
         fillForm(TEST_PASSWORD, "NewPassword123", "DifferentPassword123");
@@ -145,6 +150,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
+    @DisplayName("TC-UI-11 Wrong current password shows a server error and keeps the modal open")
     void modal_shouldShowError_whenCurrentPasswordIsWrong() {
         loginAndWaitForModal();
         fillForm("wrong-current-password", "NewPassword123", "NewPassword123");
@@ -159,6 +165,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
+    @DisplayName("TC-UI-12 Successful change closes the modal and unlocks the dashboard")
     void modal_shouldCloseAndUnlockDashboard_onSuccessfulChange() {
         loginAndWaitForModal();
         fillForm(TEST_PASSWORD, TEMP_PASSWORD, TEMP_PASSWORD);
