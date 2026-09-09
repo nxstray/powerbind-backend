@@ -32,7 +32,7 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-03 Dashboard Overview renders stat cards, power chart and energy donut")
+    @DisplayName("TC-SEL-DASHBOARD-01 Dashboard Overview renders stat cards, power chart and energy donut")
     void dashboard_shouldDisplayOverviewAndStatCards() {
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Ringkasan']")));
@@ -49,7 +49,7 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-04 Sidebar button navigates to the Agent page")
+    @DisplayName("TC-SEL-DASHBOARD-02 Sidebar button navigates to the Agent page")
     void dashboard_shouldNavigateToAgentPageViaSidebar() {
         driver.findElement(By.xpath("//button[.//span[text()='Gemono']]")).click();
 
@@ -63,7 +63,7 @@ class DashboardPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-05 Logout redirects back to the login page")
+    @DisplayName("TC-SEL-DASHBOARD-03 Logout redirects back to the login page")
     void dashboard_logout_shouldRedirectToLogin() {
         // Clicking Logout only opens the confirmation ConfirmDialog now — it doesn't
         // log out immediately. The actual logout fires from the dialog's confirm button.
