@@ -1,4 +1,4 @@
-Feature: Authentication
+Feature: BDD (Authentication)
 
   Scenario: Successful login with a pre-seeded account
     When the user logs in with username "cucumber_user" and password "password123"
