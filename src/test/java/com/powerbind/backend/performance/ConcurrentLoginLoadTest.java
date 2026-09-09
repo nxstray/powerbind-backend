@@ -58,7 +58,7 @@ class ConcurrentLoginLoadTest {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-P-02 30 concurrent logins all succeed or rate-limit gracefully within latency thresholds")
+    @DisplayName("TC-PERF-LOAD-01 30 concurrent logins all succeed or rate-limit gracefully within latency thresholds")
     void thirtyConcurrentLogins_shouldAllSucceedOrRateLimitGracefully() throws InterruptedException {
         ExecutorService pool = Executors.newFixedThreadPool(CONCURRENT_USERS);
         CountDownLatch startGate = new CountDownLatch(1);
