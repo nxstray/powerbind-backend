@@ -89,7 +89,7 @@ class AgentConversationFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-01 List conversations returns only the user's own conversations")
+    @DisplayName("TC-FUNC-AGENT-01 List conversations returns only the user's own conversations")
     void conversationList_shouldOnlyReturnOwnConversations() {
         String aliceToken = loginAndGetToken("hist_alice");
 
@@ -104,7 +104,7 @@ class AgentConversationFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-02 Read conversation messages returns only the user's own messages")
+    @DisplayName("TC-FUNC-AGENT-02 Read conversation messages returns only the user's own messages")
     void conversationMessages_shouldOnlyReturnOwnMessages() {
         String aliceToken = loginAndGetToken("hist_alice");
 
@@ -118,7 +118,7 @@ class AgentConversationFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-03 Reading another user's conversation is rejected (403/404)")
+    @DisplayName("TC-FUNC-AGENT-03 Reading another user's conversation is rejected (403/404)")
     void conversationMessages_forAnotherUsersConversation_shouldBeRejected() {
         String bobToken = loginAndGetToken("hist_bob");
 
@@ -131,7 +131,7 @@ class AgentConversationFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-04 Deleting a conversation only affects the owner, others stay untouched")
+    @DisplayName("TC-FUNC-AGENT-04 Deleting a conversation only affects the owner, others stay untouched")
     void deleteConversation_shouldOnlyDeleteOwnConversation() {
         String bobToken = loginAndGetToken("hist_bob");
 
@@ -156,14 +156,14 @@ class AgentConversationFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-05 Accessing conversations without a token is rejected (401/403)")
+    @DisplayName("TC-FUNC-AGENT-05 Accessing conversations without a token is rejected (401/403)")
     void conversations_withoutToken_shouldReturn401or403() {
         int status = RestAssured.get("http://localhost:" + port + "/api/agent/conversations").getStatusCode();
         assertTrue(status == 401 || status == 403, "Expected 401/403, got " + status);
     }
 
     @Test
-    @DisplayName("TC-F-06 Renaming own conversation updates the title")
+    @DisplayName("TC-FUNC-AGENT-06 Renaming own conversation updates the title")
     void renameConversation_shouldUpdateTitle_whenOwner() {
         String aliceToken = loginAndGetToken("hist_alice");
 
@@ -178,7 +178,7 @@ class AgentConversationFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-07 Renaming another user's conversation is rejected")
+    @DisplayName("TC-FUNC-AGENT-07 Renaming another user's conversation is rejected")
     void renameConversation_shouldBeRejected_whenNotOwner() {
         String bobToken = loginAndGetToken("hist_bob");
 
