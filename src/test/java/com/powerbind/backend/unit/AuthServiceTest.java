@@ -47,7 +47,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-01 Login with wrong password throws and records a failed attempt")
+    @DisplayName("TC-UNIT-AUTH-01 Login with wrong password throws and records a failed attempt")
     void login_shouldThrow_whenPasswordIsWrong() {
         User user = User.builder()
                 .username("admin")
@@ -66,7 +66,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-02 Login with unknown username throws invalid credentials")
+    @DisplayName("TC-UNIT-AUTH-02 Login with unknown username throws invalid credentials")
     void login_shouldThrow_whenUsernameNotFound() {
         AuthRequest.Login req = new AuthRequest.Login();
         ReflectionTestUtils.setField(req, "username", "notexist");
@@ -79,7 +79,7 @@ class AuthServiceTest {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-U-03 Login locks the account after the max failed attempts")
+    @DisplayName("TC-UNIT-AUTH-03 Login locks the account after the max failed attempts")
     void login_shouldLockAccount_afterMaxFailedAttempts() {
         User user = User.builder()
                 .username("admin")
@@ -100,7 +100,7 @@ class AuthServiceTest {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-U-04 Refresh with a valid token rotates it and returns a new token pair")
+    @DisplayName("TC-UNIT-AUTH-04 Refresh with a valid token rotates it and returns a new token pair")
     void refresh_withValidToken_shouldRotateAndReturnNewPair() {
         User user = User.builder().username("admin").build();
         RefreshToken oldToken = RefreshToken.builder()
@@ -127,7 +127,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-05 Refresh with an expired token throws and deletes the token")
+    @DisplayName("TC-UNIT-AUTH-05 Refresh with an expired token throws and deletes the token")
     void refresh_withExpiredToken_shouldThrowAndDeleteToken() {
         User user = User.builder().username("admin").build();
         RefreshToken expired = RefreshToken.builder()
@@ -148,7 +148,7 @@ class AuthServiceTest {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-U-06 Refresh with an already-revoked token detects reuse and revokes all sessions")
+    @DisplayName("TC-UNIT-AUTH-06 Refresh with an already-revoked token detects reuse and revokes all sessions")
     void refresh_withAlreadyRevokedToken_shouldDetectReuseAndRevokeAllSessions() {
         User user = User.builder().username("admin").build();
         RefreshToken reused = RefreshToken.builder()
@@ -169,7 +169,7 @@ class AuthServiceTest {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-U-07 Login on an account still on the default password flags mustChangePassword")
+    @DisplayName("TC-UNIT-AUTH-07 Login on an account still on the default password flags mustChangePassword")
     void login_shouldReportMustChangePassword_whenStillOnDefault() {
         User user = User.builder()
                 .username("budi")
@@ -192,7 +192,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-08 Change password throws when the current password is wrong")
+    @DisplayName("TC-UNIT-AUTH-08 Change password throws when the current password is wrong")
     void changePassword_shouldThrow_whenCurrentPasswordIsWrong() {
         User user = User.builder()
                 .username("budi")
@@ -212,7 +212,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-09 Change password throws when the new password matches the current one")
+    @DisplayName("TC-UNIT-AUTH-09 Change password throws when the new password matches the current one")
     void changePassword_shouldThrow_whenNewPasswordSameAsCurrent() {
         User user = User.builder()
                 .username("budi")
@@ -234,7 +234,7 @@ class AuthServiceTest {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-U-10 Change password succeeds, clears the flag, and revokes existing sessions")
+    @DisplayName("TC-UNIT-AUTH-10 Change password succeeds, clears the flag, and revokes existing sessions")
     void changePassword_shouldSucceed_clearFlagAndRevokeExistingSessions() {
         User user = User.builder()
                 .id(UUID.randomUUID()) // toProfile() calls user.getId().toString() — must not be null
