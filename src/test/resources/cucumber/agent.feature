@@ -1,4 +1,4 @@
-Feature: Agent conversation history
+Feature: BDD (Agent Conversation History)
 
   A family member should only ever see, read, or delete their own AI agent
   conversation threads — never someone else's. Groq itself is never called
