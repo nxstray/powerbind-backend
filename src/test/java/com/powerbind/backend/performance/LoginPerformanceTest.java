@@ -47,7 +47,7 @@ class LoginPerformanceTest {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-P-01 Login endpoint responds in under 500 ms")
+    @DisplayName("TC-PERF-LOGIN-01 Login endpoint responds in under 500 ms")
     void loginEndpoint_shouldRespondUnder500ms() {
         long start = System.currentTimeMillis();
 
