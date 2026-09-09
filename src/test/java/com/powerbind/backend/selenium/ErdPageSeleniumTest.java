@@ -49,9 +49,18 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
     private static final By TABLE_BOX = By.cssSelector("[data-table]");
     private static final By RELATION_PATH = By.cssSelector("path[id^='erd-path-']");
     private static final By CODE_PANEL = By.cssSelector(".inset-y-0.right-0");
-    private static final By EXPLAIN_PANEL = By.cssSelector(".absolute.z-30.w-96");
-    private static final By DATA_PANEL = By.cssSelector("div.h-80");
-    private static final By DATA_OUTPUT_TAB = By.xpath("//button[@title='Lihat isi data tabel']");
+    // AppTooltip no longer sets a native `title` — it renders a custom hover tooltip
+    // and exposes the label via `data-tooltip` on its own wrapper instead, so both this
+    // and the explain panel locator below are matched via data attributes, not classes
+    // or native title text, to stay stable across styling/layout changes.
+    private static final By EXPLAIN_PANEL = By.cssSelector("[data-explain-panel]");
+    // The data output container is always in the DOM (it animates to height 0 when
+    // closed — the old fixed h-80 class is gone), so "panel is open" is detected via
+    // the resize grip below, which carries v-if="dataPanel.open".
+    private static final By DATA_PANEL = By.cssSelector("div.relative.shrink-0");
+    private static final By DATA_PANEL_GRIP = By.cssSelector("div.cursor-ns-resize");
+    // data-tooltip lives on the AppTooltip wrapper div, not on the trigger button itself
+    private static final By DATA_OUTPUT_TAB = By.xpath("//div[@data-tooltip='Lihat isi data tabel']/button");
     private static final By DIMMED_TABLE = By.xpath("//div[@data-table][contains(@class,'opacity-30')]");
     private static final By FOCUSED_TABLE = By.xpath("//div[@data-table][contains(@class,'ring-sky-300')]");
     private static final By LOAD_ERROR = By.xpath("//*[contains(text(),'Gagal memuat skema')]");
@@ -73,10 +82,14 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
     }
 
     private WebElement tableHeader(String tableName) {
-        // Every table header div carries the "open code panel" title — matching the
-        // text inside it pins the locator to exactly one table
+        // Every table header div carries the "open code panel" tooltip via `data-tooltip`
+        // on the AppTooltip wrapper it's nested inside. The table name itself lives on a
+        // child div of that wrapper (NOT on the wrapper's own text nodes), so the box is
+        // pinned via a descendant-text predicate. The tooltip bubble's text is the tooltip
+        // label, never a table name, so it can't collide with the match.
         return driver.findElement(By.xpath(
-                "//div[@data-table]//div[@title='Klik untuk lihat kode entity'][normalize-space()='" + tableName + "']"));
+                "//div[@data-table][.//div[@data-tooltip='Klik untuk lihat kode entity'][.//*[normalize-space(text())='"
+                        + tableName + "']]]//div[@data-tooltip='Klik untuk lihat kode entity']"));
     }
 
     private WebElement tableBox(String tableName) {
@@ -121,7 +134,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
         assertTrue(tables.size() >= 5,
                 "Expected the JPA entities to render as table boxes, got " + tables.size());
         assertTrue(driver.findElements(By.xpath(
-                        "//div[@data-table]//div[@title='Klik untuk lihat kode entity'][normalize-space()='users']"))
+                        "//div[@data-table][.//div[@data-tooltip='Klik untuk lihat kode entity'][.//*[normalize-space(text())='users']]]"))
                         .size() == 1,
                 "The 'users' table box should be on the canvas");
         assertFalse(driver.findElements(RELATION_PATH).isEmpty(),
@@ -284,14 +297,19 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
         panel.findElement(By.xpath(".//div[contains(@class,'w-56')]//button[normalize-space()='users']")).click();
 
         new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(d -> !d.findElements(By.cssSelector("div.h-80 table")).isEmpty());
+                .until(d -> {
+                    List<WebElement> panels = d.findElements(DATA_PANEL);
+                    return !panels.isEmpty() && !panels.get(0).findElements(By.tagName("table")).isEmpty();
+                });
         String header = driver.findElement(DATA_PANEL).getText();
         assertTrue(header.contains("Hal. 1 /"), "Pagination line 'Hal. x / y' should be shown, got: " + header);
         assertTrue(header.contains("baris"), "The total row count should be shown next to the pagination");
         attachScreenshot("erd-14-data-panel-users-rows");
 
         driver.findElement(DATA_OUTPUT_TAB).click(); // the folder tab toggles the panel closed again
-        waitUntilGone(DATA_PANEL);
+        // The container always stays in the DOM (height animates to 0 when closed), so
+        // assert closure via the resize grip, which only exists while the panel is open.
+        waitUntilGone(DATA_PANEL_GRIP);
         attachScreenshot("erd-15-data-panel-closed");
     }
 
