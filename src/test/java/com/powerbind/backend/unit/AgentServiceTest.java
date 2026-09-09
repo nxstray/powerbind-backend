@@ -60,7 +60,7 @@ class AgentServiceTest {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-U-01 Chat without conversationId creates a new conversation and persists both messages")
+    @DisplayName("TC-UNIT-AGENT-01 Chat without conversationId creates a new conversation and persists both messages")
     void chat_withoutConversationId_shouldCreateNewConversation_andPersistBothMessages() {
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
         when(groqService.streamChat(anyList())).thenReturn(Flux.just("Hi ", "Alice"));
@@ -94,7 +94,7 @@ class AgentServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-02 Chat with conversationId reuses the user's own conversation")
+    @DisplayName("TC-UNIT-AGENT-02 Chat with conversationId reuses the user's own conversation")
     void chat_withConversationId_shouldReuseOwnedConversation_notCreateNewOne() {
         UUID conversationId = UUID.randomUUID();
         Conversation existing = Conversation.builder().id(conversationId).user(alice).title("Existing").build();
@@ -115,7 +115,7 @@ class AgentServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-03 Reading messages only queries the user's own conversation")
+    @DisplayName("TC-UNIT-AGENT-03 Reading messages only queries the user's own conversation")
     void getConversationMessages_shouldOnlyQueryMessagesForOwnedConversation() {
         UUID conversationId = UUID.randomUUID();
         Conversation conversation = Conversation.builder().id(conversationId).user(alice).title("T").build();
@@ -130,7 +130,7 @@ class AgentServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-04 Renaming own conversation updates the title")
+    @DisplayName("TC-UNIT-AGENT-04 Renaming own conversation updates the title")
     void renameConversation_shouldUpdateTitle_whenOwnedByUser() {
         UUID conversationId = UUID.randomUUID();
         Conversation conversation = Conversation.builder().id(conversationId).user(alice).title("Lama").build();
@@ -146,7 +146,7 @@ class AgentServiceTest {
     }
 
     @Test
-    @DisplayName("TC-U-05 Renaming another user's conversation is rejected")
+    @DisplayName("TC-UNIT-AGENT-05 Renaming another user's conversation is rejected")
     void renameConversation_shouldThrow_whenNotOwnedByUser() {
         UUID conversationId = UUID.randomUUID();
 
