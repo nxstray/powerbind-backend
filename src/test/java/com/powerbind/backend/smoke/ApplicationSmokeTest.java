@@ -19,7 +19,7 @@ class ApplicationSmokeTest {
     private int port;
 
     @Test
-    @DisplayName("TC-S-01 Health endpoint returns 200")
+    @DisplayName("TC-SMOKE-APPLICATION-01 Health endpoint returns 200")
     void healthEndpoint_shouldReturn200() {
         int status = RestAssured.get("http://localhost:" + port + "/actuator/health")
                 .getStatusCode();
