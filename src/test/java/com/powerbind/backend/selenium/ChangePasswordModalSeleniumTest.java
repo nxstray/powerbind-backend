@@ -117,7 +117,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-UI-08 Change password modal appears right after login when the account is still on the default password")
+    @DisplayName("TC-SEL-CHANGE-PASSWORD-01 Change password modal appears right after login when the account is still on the default password")
     void modal_shouldAppear_whenAccountStillOnDefaultPassword() {
         loginAndWaitForModal();
         attachScreenshot("changepw-01-modal-shown");
@@ -128,7 +128,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-09 Dashboard behind the modal is blocked until the change is completed")
+    @DisplayName("TC-SEL-CHANGE-PASSWORD-02 Dashboard behind the modal is blocked until the change is completed")
     void modal_shouldBlockAccessToDashboard_untilCompleted() {
         loginAndWaitForModal();
 
@@ -141,7 +141,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-10 Mismatched confirmation shows an error and keeps the modal open")
+    @DisplayName("TC-SEL-CHANGE-PASSWORD-03 Mismatched confirmation shows an error and keeps the modal open")
     void modal_shouldShowError_whenConfirmationDoesNotMatch() {
         loginAndWaitForModal();
         fillForm(TEST_PASSWORD, "NewPassword123", "DifferentPassword123");
@@ -155,7 +155,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-11 Wrong current password shows a server error and keeps the modal open")
+    @DisplayName("TC-SEL-CHANGE-PASSWORD-04 Wrong current password shows a server error and keeps the modal open")
     void modal_shouldShowError_whenCurrentPasswordIsWrong() {
         loginAndWaitForModal();
         fillForm("wrong-current-password", "NewPassword123", "NewPassword123");
@@ -170,7 +170,7 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-UI-12 Successful change closes the modal and unlocks the dashboard")
+    @DisplayName("TC-SEL-CHANGE-PASSWORD-05 Successful change closes the modal and unlocks the dashboard")
     void modal_shouldCloseAndUnlockDashboard_onSuccessfulChange() {
         loginAndWaitForModal();
         fillForm(TEST_PASSWORD, TEMP_PASSWORD, TEMP_PASSWORD);
