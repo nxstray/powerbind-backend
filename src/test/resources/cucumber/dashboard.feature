@@ -1,4 +1,4 @@
-Feature: Dashboard summary
+Feature: BDD (Dashboard Summary)
 
   The dashboard gives an authenticated user a live snapshot of rooms, power
   usage, and estimated cost — and must never be reachable anonymously.
