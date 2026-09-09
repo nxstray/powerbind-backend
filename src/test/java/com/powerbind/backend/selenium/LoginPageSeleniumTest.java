@@ -23,7 +23,7 @@ class LoginPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-UI-01 Login with valid credentials redirects away from the login page")
+    @DisplayName("TC-SEL-LOGIN-01 Login with valid credentials redirects away from the login page")
     void login_withValidCredentials_shouldRedirectToDashboard() {
         driver.get(FRONTEND_URL + "/login");
         attachScreenshot("login-01-page-loaded");
@@ -46,7 +46,7 @@ class LoginPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-02 Login with invalid credentials shows an error message")
+    @DisplayName("TC-SEL-LOGIN-02 Login with invalid credentials shows an error message")
     void login_withInvalidCredentials_shouldShowErrorMessage() {
         driver.get(FRONTEND_URL + "/login");
 
