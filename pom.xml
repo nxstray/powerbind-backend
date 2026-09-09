@@ -139,6 +139,14 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- Prometheus registry — dibutuhkan supaya Actuator meng-expose
+		     endpoint /actuator/prometheus (format metrik yang di-scrape Prometheus) -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
 		<!-- Flyway for database migration -->
 		<dependency>
 			<groupId>org.flywaydb</groupId>
