@@ -50,7 +50,7 @@ class AuthFunctionalTest {
 
     @Severity(SeverityLevel.BLOCKER)
     @Test
-    @DisplayName("TC-F-06 Login with valid credentials returns access and refresh tokens")
+    @DisplayName("TC-FUNC-AUTH-01 Login with valid credentials returns access and refresh tokens")
     void login_withValidCredentials_shouldReturnTokens() {
         var loginResponse = RestAssured.given()
                 .contentType("application/json")
@@ -63,7 +63,7 @@ class AuthFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-07 Login with invalid credentials returns 400")
+    @DisplayName("TC-FUNC-AUTH-02 Login with invalid credentials returns 400")
     void login_withInvalidCredentials_shouldReturn400() {
         int status = RestAssured.given()
                 .contentType("application/json")
@@ -74,7 +74,7 @@ class AuthFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-08 GET /me with a valid token returns the user's profile")
+    @DisplayName("TC-FUNC-AUTH-03 GET /me with a valid token returns the user's profile")
     void me_withValidToken_shouldReturnProfile() {
         String token = RestAssured.given()
                 .contentType("application/json")
@@ -91,7 +91,7 @@ class AuthFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-09 Refresh with a valid refresh token returns a new token pair")
+    @DisplayName("TC-FUNC-AUTH-04 Refresh with a valid refresh token returns a new token pair")
     void refresh_withValidToken_shouldReturnNewPair() {
         String refreshToken = RestAssured.given()
                 .contentType("application/json")
@@ -110,7 +110,7 @@ class AuthFunctionalTest {
     }
 
     @Test
-    @DisplayName("TC-F-10 Reusing an already-rotated refresh token is rejected and kills all sessions")
+    @DisplayName("TC-FUNC-AUTH-05 Reusing an already-rotated refresh token is rejected and kills all sessions")
     void refresh_withReusedToken_shouldBeRejectedAndRevokeAllSessions() {
         String originalRefreshToken = RestAssured.given()
                 .contentType("application/json")
