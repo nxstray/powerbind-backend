@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 // /erd is router-guarded (requiresAdmin) and /api/admin/erd itself is hasRole('ADMIN')
 // gated, so a USER account would just bounce back to the dashboard.
 //
-// Optional extra coverage: TC-UI-22 (router guard for non-admins) only runs when
+// Optional extra coverage: TC-SEL-ERD-10 (router guard for non-admins) only runs when
 //   -Dselenium.nonAdminUsername / -Dselenium.nonAdminPassword are also supplied.
 @DisplayName("UI Test (erd)")
 @Tag("ui")
@@ -115,7 +115,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-UI-13 ERD canvas renders every entity table with columns, key icons and relation cables")
+    @DisplayName("TC-SEL-ERD-01 ERD canvas renders every entity table with columns, key icons and relation cables")
     void erd_shouldRenderSchemaTablesAndRelations() {
         List<WebElement> tables = driver.findElements(TABLE_BOX);
         assertTrue(tables.size() >= 5,
@@ -135,7 +135,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-14 Toolbar zoom in/out buttons and the % label update the canvas scale")
+    @DisplayName("TC-SEL-ERD-02 Toolbar zoom in/out buttons and the % label update the canvas scale")
     void erd_zoomControls_shouldUpdateScale() {
         int initial = currentScalePct(); // fresh load starts at the 1.2 default => 120%
         assertEquals(120, initial, "A fresh ERD load should start at the default 120% scale");
@@ -159,7 +159,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-15 'Fit to screen' shrinks the tall layout and 'Reset view' restores the default")
+    @DisplayName("TC-SEL-ERD-03 'Fit to screen' shrinks the tall layout and 'Reset view' restores the default")
     void erd_fitAndReset_shouldAdjustViewport() {
         toolbarButtons().get(IDX_ZOOM_IN).click();
         waitUntilScaleChanges(120); // now at 138% so Reset has something visible to undo
@@ -185,7 +185,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-16 Grid toggle switches the canvas dot-grid off and back on")
+    @DisplayName("TC-SEL-ERD-04 Grid toggle switches the canvas dot-grid off and back on")
     void erd_gridToggle_shouldSwitchBackgroundGrid() {
         assertTrue(toolbarButtons().get(IDX_GRID).getAttribute("class").contains("bg-sky-500"),
                 "Grid button should start highlighted (grid is on by default)");
@@ -211,7 +211,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-17 Clicking a table header opens the entity code panel and closing it hides the panel")
+    @DisplayName("TC-SEL-ERD-05 Clicking a table header opens the entity code panel and closing it hides the panel")
     void erd_tableHeaderClick_shouldOpenCodePanel() {
         tableHeader("users").click();
 
@@ -231,7 +231,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-18 Clicking a PK/FK icon opens the AI explain panel for that column")
+    @DisplayName("TC-SEL-ERD-06 Clicking a PK/FK icon opens the AI explain panel for that column")
     void erd_keyIconClick_shouldOpenAiExplainPanel() {
         // The first amber key icon on the canvas is always a primary-key column
         WebElement pkIcon = driver.findElement(By.cssSelector("[data-table] svg.text-amber-500"));
@@ -261,7 +261,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-19 Data output panel previews table rows with pagination and closes from its tab")
+    @DisplayName("TC-SEL-ERD-07 Data output panel previews table rows with pagination and closes from its tab")
     void erd_dataOutputPanel_shouldPreviewTableRows() {
         driver.findElement(DATA_OUTPUT_TAB).click();
 
@@ -297,7 +297,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-20 Clicking a table focuses its neighbours, dims the rest, and clicking again clears it")
+    @DisplayName("TC-SEL-ERD-08 Clicking a table focuses its neighbours, dims the rest, and clicking again clears it")
     void erd_tableClick_shouldFocusNeighbours() {
         columnRow("users", "username").click();
 
@@ -316,7 +316,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-21 Sidebar navigates ERD -> Log -> Dashboard")
+    @DisplayName("TC-SEL-ERD-09 Sidebar navigates ERD -> Log -> Dashboard")
     void erd_sidebar_shouldNavigateBetweenPages() {
         driver.findElement(By.xpath("//aside//button[.//span[text()='Log']]")).click();
         new WebDriverWait(driver, Duration.ofSeconds(10))
@@ -337,7 +337,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-UI-22 Router guard bounces a non-admin account away from /erd and /log")
+    @DisplayName("TC-SEL-ERD-10 Router guard bounces a non-admin account away from /erd and /log")
     void erd_routerGuard_shouldRedirectNonAdminToDashboard() {
         String nonAdminUser = System.getProperty("selenium.nonAdminUsername");
         String nonAdminPass = System.getProperty("selenium.nonAdminPassword");
