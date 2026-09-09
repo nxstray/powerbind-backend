@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 // The account behind -Dselenium.username/-Dselenium.password MUST be an ADMIN:
 // /log is router-guarded (requiresAdmin) and /api/admin/logs is hasRole('ADMIN') gated.
 // Loki being down does NOT fail these tests — the page still renders and every
-// client-side feature (chips, range, focus) keeps working; only TC-UI-27 (row expand)
+// client-side feature (chips, range, focus) keeps working; only TC-SEL-LOG-05 (row expand)
 // needs actual log rows and skips gracefully when the window is empty.
 @DisplayName("UI Test (log)")
 @Tag("ui")
@@ -66,7 +66,7 @@ class LogPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.CRITICAL)
     @Test
-    @DisplayName("TC-UI-23 Log page renders the volume chart, level chips, range selector and all three source panels")
+    @DisplayName("TC-SEL-LOG-01 Log page renders the volume chart, level chips, range selector and all three source panels")
     void log_shouldRenderChartChipsRangeAndPanels() {
         assertFalse(driver.findElements(By.xpath("//button[normalize-space()='Logs volume']")).isEmpty(),
                 "The 'Logs volume' chart toggle should sit at the top of the page");
@@ -85,28 +85,31 @@ class LogPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-24 Level chips toggle off and back on to filter the stream")
+    @DisplayName("TC-SEL-LOG-02 Level chips toggle off and back on to filter the stream")
     void log_levelChips_shouldToggleFiltering() {
         WebElement errorChip = driver.findElement(By.xpath("//button[normalize-space()='ERROR']"));
-        assertTrue(errorChip.getAttribute("class").contains("text-red-400"),
+        // Active label color is theme-dependent (LogPage.vue chipClass): text-red-400 on
+        // the dark weather theme, text-red-600 on the light one. Assert the red prefix so
+        // this passes in either theme — inactive is always text-zinc-500/text-gray-400.
+        assertTrue(errorChip.getAttribute("class").contains("text-red-"),
                 "ERROR chip should start active (red label tint)");
 
         errorChip.click();
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> !d.findElement(By.xpath("//button[normalize-space()='ERROR']"))
-                        .getAttribute("class").contains("text-red-400"));
+                        .getAttribute("class").contains("text-red-"));
         attachScreenshot("log-02-error-chip-toggled-off");
 
         driver.findElement(By.xpath("//button[normalize-space()='ERROR']")).click();
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> d.findElement(By.xpath("//button[normalize-space()='ERROR']"))
-                        .getAttribute("class").contains("text-red-400"));
+                        .getAttribute("class").contains("text-red-"));
         attachScreenshot("log-03-error-chip-toggled-back-on");
     }
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-25 Range dropdown lists every window, switches to 24h and closes after picking")
+    @DisplayName("TC-SEL-LOG-03 Range dropdown lists every window, switches to 24h and closes after picking")
     void log_rangeDropdown_shouldSwitchWindow() {
         driver.findElement(By.xpath("//button[contains(normalize-space(),'1 jam')]")).click();
 
@@ -128,7 +131,7 @@ class LogPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-26 Focusing a panel switches to a single-column view, unfocusing restores all three")
+    @DisplayName("TC-SEL-LOG-04 Focusing a panel switches to a single-column view, unfocusing restores all three")
     void log_panelFocus_shouldSwitchBetweenSingleAndTripleView() {
         panelFocusButton("//span[normalize-space()='Backend']").click();
 
@@ -146,7 +149,7 @@ class LogPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-27 Clicking a log row expands it and clicking again collapses it")
+    @DisplayName("TC-SEL-LOG-05 Clicking a log row expands it and clicking again collapses it")
     void log_rowClick_shouldExpandAndCollapse() {
         WebElement row = lastBackendRow();
         Assumptions.assumeTrue(row != null,
@@ -172,7 +175,7 @@ class LogPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-28 Sidebar navigates Log -> ERD and the ERD canvas loads")
+    @DisplayName("TC-SEL-LOG-06 Sidebar navigates Log -> ERD and the ERD canvas loads")
     void log_sidebar_shouldNavigateToErdPage() {
         driver.findElement(By.xpath("//aside//button[.//span[text()='ERD']]")).click();
         new WebDriverWait(driver, Duration.ofSeconds(10))
@@ -185,7 +188,7 @@ class LogPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-29 Logout from the Log page opens the confirm dialog and returns to the login page")
+    @DisplayName("TC-SEL-LOG-07 Logout from the Log page opens the confirm dialog and returns to the login page")
     void log_logout_shouldReturnToLoginPage() {
         // The sidebar logout is the icon button carrying the 'shrink-0' class — the
         // collapse toggle in the same footer has no such class
