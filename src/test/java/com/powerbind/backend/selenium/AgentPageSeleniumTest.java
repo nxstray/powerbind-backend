@@ -28,7 +28,7 @@ class AgentPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-06 Agent page shows a personalized greeting")
+    @DisplayName("TC-SEL-AGENT-01 Agent page shows a personalized greeting")
     void agentPage_shouldShowDynamicGreeting() {
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h2[contains(text(),'Halo,')]")));
@@ -41,7 +41,7 @@ class AgentPageSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-07 Sent message appears as a user chat bubble")
+    @DisplayName("TC-SEL-AGENT-02 Sent message appears as a user chat bubble")
     void agentPage_sendingMessage_shouldAppearAsUserBubble() {
         String message = "Berapa pemakaian energi hari ini?";
 
