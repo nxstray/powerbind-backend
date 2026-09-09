@@ -3,9 +3,17 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
+    <!-- Loki URL diambil dari application.properties (loki.url) — berupa BASE URL
+         tanpa path, konsisten dengan AdminLogController yang menambahkan
+         /loki/api/v1/query_range sendiri; appender ini menambahkan /loki/api/v1/push.
+         Default localhost supaya tetap jalan di dev tanpa Docker; di docker-compose
+         override lewat env LOKI_URL=http://loki:3100 -->
+    <springProperty scope="context" name="LOKI_URL" source="loki.url"
+                     defaultValue="http://localhost:3100"/>
+
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
         <http>
-            <url>http://localhost:3100/loki/api/v1/push</url>
+            <url>${LOKI_URL}/loki/api/v1/push</url>
         </http>
         <format>
             <label>
