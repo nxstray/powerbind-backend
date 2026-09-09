@@ -69,10 +69,16 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health").permitAll()
                 // Auth endpoints — login and register are public
                 .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh").permitAll()
+                // Log ingestion endpoint — public so frontend can send logs without auth
+                .requestMatchers("/api/logs").permitAll()
                 // WebSocket endpoint
                 .requestMatchers("/ws/**").permitAll()
                 // CORS preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // Allow Spring's default error handling path to prevent 401 masking 404/500 errors
+                .requestMatchers("/error").permitAll()
+                // Agent endpoints require authentication
+                .requestMatchers("/api/agent/**").authenticated()
                 // Everything else requires authentication
                 .anyRequest().authenticated()
             )
