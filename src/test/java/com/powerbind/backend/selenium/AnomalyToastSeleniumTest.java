@@ -69,7 +69,7 @@ class AnomalyToastSeleniumTest extends SeleniumTestBase {
 
     @Severity(SeverityLevel.NORMAL)
     @Test
-    @DisplayName("TC-UI-06 Relay turned ON in an empty room shows the anomaly toast, not the old badge")
+    @DisplayName("TC-SEL-ANOMALY-01 Relay turned ON in an empty room shows the anomaly toast, not the old badge")
     void relayTurnedOnInEmptyRoom_shouldShowAnomalyToast() {
         loginAsTestUser();
         driver.get(FRONTEND_URL + "/agent");
