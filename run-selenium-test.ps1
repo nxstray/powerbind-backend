@@ -1,4 +1,4 @@
-# Runs ONLY @Tag("ui") Selenium tests (Login, Dashboard, AgentPage, ChangePasswordModal, AnomalyToast).
+# Runs ONLY @Tag("ui") Selenium tests (Login, Dashboard, AgentPage, ChangePasswordModal, AnomalyToast, ErdPage, LogPage).
 # Does NOT generate or open the Allure report - run .\run-allure.ps1 for that.
 #
 # PREREQUISITES - start these manually FIRST, in separate terminals:
@@ -6,22 +6,18 @@
 #   2. Frontend: npm run dev           (default: http://localhost:5173)
 #
 # Usage:
-#   .\run-selenium-test.ps1 -Username {username}
-#   (you will be prompted to type the password securely, it will not echo to screen)
+#   .\run-selenium-test.ps1
+#   You'll be prompted for: Username, Password (hidden), then DB username
+#   (hit Enter to skip the DB one - only ChangePasswordModalSeleniumTest needs it,
+#   everything else runs fine without it). If you give a DB username, you'll then
+#   also be prompted for the DB password (hidden).
 #
-#   DB credentials are OPTIONAL and only needed by ChangePasswordModalSeleniumTest,
-#   which uses them to flip must_change_password directly in Postgres (there is no
-#   API to re-arm that flag). Omit -DbUsername entirely to skip that — every other
-#   suite runs fine without it, ChangePasswordModalSeleniumTest will just self-skip.
-#
-#   .\run-selenium-test.ps1 -Username {username} -DbUsername {db user}
-#   (you will then also be prompted for the DB password securely)
+#   All prompts can still be skipped by passing the matching parameter, e.g.:
+#   .\run-selenium-test.ps1 -Username Afwan -DbUsername postgres
 
 param(
-    [Parameter(Mandatory = $true)]
     [string]$Username,
 
-    [Parameter(Mandatory = $true)]
     [SecureString]$Password,
 
     [string]$FrontendUrl = "http://localhost:5173",
@@ -33,6 +29,18 @@ param(
 
     [string]$DbUrl = "jdbc:postgresql://localhost:5432/powerbind"
 )
+
+if (-not $Username) {
+    $Username = Read-Host -Prompt "Selenium test username"
+}
+
+if (-not $Password) {
+    $Password = Read-Host -Prompt "Selenium test password" -AsSecureString
+}
+
+if (-not $DbUsername) {
+    $DbUsername = Read-Host -Prompt "DB username for ChangePasswordModalSeleniumTest (leave blank to skip)"
+}
 
 $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
 $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
@@ -66,7 +74,7 @@ Write-Host "Frontend URL: $FrontendUrl | Test user: $Username" -ForegroundColor 
 if ($DbUsername) {
     Write-Host "DB toggle enabled for user: $DbUsername (ChangePasswordModalSeleniumTest will run in full)" -ForegroundColor DarkGray
 } else {
-    Write-Host "No -DbUsername provided - ChangePasswordModalSeleniumTest's DB-dependent tests will be skipped." -ForegroundColor DarkGray
+    Write-Host "No DB username provided - ChangePasswordModalSeleniumTest's DB-dependent tests will be skipped." -ForegroundColor DarkGray
 }
 
 mvn test @mvnArgs
