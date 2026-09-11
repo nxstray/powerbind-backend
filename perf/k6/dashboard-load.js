@@ -18,9 +18,11 @@
 // GET /ws/info → ws.connect /ws/{server}/{session}/websocket → server kirim
 // frame 'o' → semua frame STOMP dibungkus array JSON, mis. ["CONNECT\n...\u0000"].
 //
-// Jalankan (backend harus sudah jalan, default http://localhost:8045):
-//   k6 run perf/k6/dashboard-load.js
-//   k6 run -e BASE_URL=http://localhost:8045 -e VUS=50 -e DURATION=2m perf/k6/dashboard-load.js
+// Jalankan (backend harus sudah jalan, default http://localhost:8045).
+// Kredensial WAJIB lewat -e, atau pakai runner ps1 (prompt):
+//   .\run-loadtest-admin.ps1   /   .\run-loadtest-user.ps1
+//   k6 run -e K6_USERNAME={user} -e K6_PASSWORD={pw} perf/k6/dashboard-load.js
+//   k6 run -e K6_USERNAME={user} -e K6_PASSWORD={pw} -e VUS=50 -e DURATION=2m perf/k6/dashboard-load.js
 //
 // Threshold pass/fail — dipakai sebagai gerbang regresi performa:
 //   - p95 latency endpoint REST < 500ms
@@ -37,8 +39,11 @@ const WS_URL = __ENV.WS_URL || 'ws://localhost:8045/ws'
 const VUS = parseInt(__ENV.VUS || '20', 10)
 const DURATION = __ENV.DURATION || '1m'
 
-const USERNAME = __ENV.K6_USERNAME || 'admin'
-const PASSWORD = __ENV.K6_PASSWORD || 'admin123'
+// Kredensial WAJIB lewat -e (tanpa default): kalau k6 dipanggil polos, run
+// langsung di-abort di setup() dengan pesan jelas - BUKAN fallback ke
+// admin/admin123 yang stale (login gagal 5x = akun terkunci 10 menit).
+const USERNAME = __ENV.K6_USERNAME || ''
+const PASSWORD = __ENV.K6_PASSWORD || ''
 
 // Metrik tambahan di luar bawaan k6
 const wsMessages = new Counter('stomp_messages_received')
@@ -100,6 +105,15 @@ function login() {
 // Kalau login di sini gagal, seluruh run di-abort — percuma lanjut tanpa JWT.
 // JWT default exp 1 jam (application.properties), jauh di atas durasi test.
 export function setup() {
+  // Fail-fast sebelum menyentuh backend: tanpa kredensial, jangan coba-coba
+  // login (5 login gagal = akun terkunci 10 menit).
+  if (!USERNAME || !PASSWORD) {
+    throw new Error(
+      'setup: K6_USERNAME / K6_PASSWORD wajib diberikan lewat -e (tanpa default). ' +
+      'Disarankan pakai runner: .\\run-loadtest-admin.ps1 atau .\\run-loadtest-user.ps1 ' +
+      '(kredensial ditanyakan lewat prompt).'
+    )
+  }
   const token = login()
   if (!token) {
     throw new Error(
