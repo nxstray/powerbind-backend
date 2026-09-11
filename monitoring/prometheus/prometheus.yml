@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'powerbind-backend'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      # nama "backend" = nama service di docker-compose.yml, bukan localhost,
+      # karena prometheus jalan di container terpisah dalam network yang sama
+      #- targets: ['backend:8045']
+      - targets: ['host.docker.internal:8045']
