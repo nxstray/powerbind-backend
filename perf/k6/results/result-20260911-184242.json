@@ -1,0 +1,227 @@
+{
+    "metrics": {
+        "iterations": {
+            "count": 13,
+            "rate": 0.25955324138772895
+        },
+        "ws_msgs_received": {
+            "rate": 0.11979380371741336,
+            "count": 6
+        },
+        "http_req_duration{scenario:dashboard_users}": {
+            "avg": 8.084372727272727,
+            "min": 4.6522,
+            "med": 7.93625,
+            "max": 13.9047,
+            "p(90)": 11.02814,
+            "p(95)": 12.070359999999999,
+            "thresholds": {
+                "p(95)<500": false
+            }
+        },
+        "data_received": {
+            "count": 20136,
+            "rate": 402.0280052756392
+        },
+        "ws_connecting": {
+            "max": 2.0008,
+            "p(90)": 1.95791,
+            "p(95)": 1.979355,
+            "avg": 1.78635,
+            "min": 1.5719,
+            "med": 1.78635
+        },
+        "ws_msgs_sent": {
+            "count": 4,
+            "rate": 0.0798625358116089
+        },
+        "http_req_blocked": {
+            "avg": 0.44272400000000006,
+            "min": 0,
+            "med": 0,
+            "max": 9.4624,
+            "p(90)": 0.30282000000000076,
+            "p(95)": 0.9817399999999983
+        },
+        "http_req_tls_handshaking": {
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0
+        },
+        "http_req_sending": {
+            "avg": 0.022639999999999997,
+            "min": 0,
+            "med": 0,
+            "max": 0.566,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_waiting": {
+            "min": 1.849,
+            "med": 6.4787,
+            "max": 71.0627,
+            "p(90)": 11.26994,
+            "p(95)": 13.023219999999995,
+            "avg": 9.910284
+        },
+        "http_req_duration": {
+            "avg": 10.132100000000001,
+            "min": 1.849,
+            "med": 6.9916,
+            "max": 71.0627,
+            "p(90)": 11.694180000000001,
+            "p(95)": 13.548579999999994
+        },
+        "iteration_duration": {
+            "p(90)": 24979.60694000002,
+            "p(95)": 30004.151400000002,
+            "avg": 7942.948053846154,
+            "min": 2343.3095,
+            "med": 4410.6401,
+            "max": 30004.9707
+        },
+        "http_reqs": {
+            "rate": 0.49914084882255566,
+            "count": 25
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 10.132100000000001,
+            "min": 1.849,
+            "med": 6.9916,
+            "max": 71.0627,
+            "p(90)": 11.694180000000001,
+            "p(95)": 13.548579999999994
+        },
+        "checks": {
+            "passes": 28,
+            "fails": 0,
+            "value": 1
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 25,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "ws_connect_time_ms": {
+            "min": 1,
+            "med": 1.5,
+            "max": 2,
+            "p(90)": 1.9,
+            "p(95)": 1.95,
+            "avg": 1.5,
+            "thresholds": {
+                "p(99)<2000": false
+            }
+        },
+        "data_sent": {
+            "count": 7192,
+            "rate": 143.59283938927283
+        },
+        "vus": {
+            "value": 1,
+            "min": 0,
+            "max": 4
+        },
+        "http_req_receiving": {
+            "p(90)": 0.5229400000000001,
+            "p(95)": 0.5238200000000001,
+            "avg": 0.199176,
+            "min": 0,
+            "med": 0,
+            "max": 0.5352
+        },
+        "ws_session_duration": {
+            "p(90)": 30002.36811,
+            "p(95)": 30002.402104999997,
+            "avg": 30002.096149999998,
+            "min": 30001.7562,
+            "med": 30002.096149999998,
+            "max": 30002.4361
+        },
+        "http_req_connecting": {
+            "max": 0.535,
+            "p(90)": 0.30282000000000076,
+            "p(95)": 0.52494,
+            "avg": 0.06278800000000001,
+            "min": 0,
+            "med": 0
+        },
+        "vus_max": {
+            "value": 4,
+            "min": 4,
+            "max": 4
+        },
+        "ws_sessions": {
+            "count": 2,
+            "rate": 0.03993126790580445
+        }
+    },
+    "setup_data": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4OTEyNjk2MiwiZXhwIjoxNzg5MTMwNTYyfQ.hrZb3MHZXMbx6En7Ae3y8586YpmSpvMRj6tAKIxqyZU"
+    },
+    "root_group": {
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "name": "setup",
+                "path": "::setup",
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {
+                        "login 200": {
+                            "passes": 1,
+                            "fails": 0,
+                            "name": "login 200",
+                            "path": "::setup::login 200",
+                            "id": "647055af8ffe21e58084ae4b140cdda0"
+                        },
+                        "login returns accessToken": {
+                            "name": "login returns accessToken",
+                            "path": "::setup::login returns accessToken",
+                            "id": "5e6ea6eda796e7727324f0eba72529e3",
+                            "passes": 1,
+                            "fails": 0
+                        }
+                    }
+            }
+        },
+        "checks": {
+            "summary 200": {
+                "name": "summary 200",
+                "path": "::summary 200",
+                "id": "ef4cc48a6fc47f68a64672f955fbd56d",
+                "passes": 11,
+                "fails": 0
+            },
+            "power-history 200": {
+                "passes": 11,
+                "fails": 0,
+                "name": "power-history 200",
+                "path": "::power-history 200",
+                "id": "f0c039d00a831487e99bff85558cf847"
+            },
+            "sockjs info 200": {
+                "passes": 2,
+                "fails": 0,
+                "name": "sockjs info 200",
+                "path": "::sockjs info 200",
+                "id": "5247e7ae88eda164fb7ab8f532c72d9c"
+            },
+            "ws connected (101)": {
+                "name": "ws connected (101)",
+                "path": "::ws connected (101)",
+                "id": "2fea2be6d5d2c280d43a58060154352f",
+                "passes": 2,
+                "fails": 0
+            }
+        },
+        "name": "",
+        "path": ""
+    }
+}
