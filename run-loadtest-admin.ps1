@@ -4,24 +4,47 @@
 # pollutes the dashboard/InfluxDB.
 #
 # Usage:
-#   .\run-loadtest.ps1                                  # default: 20 VU / 1m @ localhost:8045
-#   .\run-loadtest.ps1 -Vus 50 -Duration 2m             # heavier run
-#   .\run-loadtest.ps1 -Baseline                        # quick 10 VU / 30s baseline first
-#   .\run-loadtest.ps1 -BaseUrl http://192.168.1.10:8045 -WsUrl ws://192.168.1.10:8045/ws
-#   .\run-loadtest.ps1 -Username admin -Password admin123
+#   .\run-loadtest-admin.ps1                            # default: 20 VU / 1m @ localhost:8045
+#   .\run-loadtest-admin.ps1 -Vus 50 -Duration 2m       # heavier run
+#   .\run-loadtest-admin.ps1 -Baseline                  # quick 10 VU / 30s baseline first
+#   .\run-loadtest-admin.ps1 -BaseUrl http://192.168.1.10:8045 -WsUrl ws://192.168.1.10:8045/ws
+#   Kredensial: ditanyakan lewat prompt tiap run (password hidden) - KECUALI
+#   diberikan eksplisit:
+#   .\run-loadtest-admin.ps1 -Username {user} -Password (ConvertTo-SecureString 'pw' -AsPlainText -Force)
+#   Untuk akun family (role USER): pakai .\run-loadtest-user.ps1.
 
 param(
     [int]$Vus = 20,
     [string]$Duration = "1m",
     [string]$BaseUrl = "http://localhost:8045",
     [string]$WsUrl = "ws://localhost:8045/ws",
-    [string]$Username = "admin",
-    [string]$Password = "admin123",
+    # Kredensial akun yang diuji. Kalau tidak diberikan, KEDUANYA ditanyakan
+    # lewat prompt di blok bawah (input password hidden). Boleh akun admin
+    # maupun akun lain - hanya /api/admin/** yang butuh role ADMIN.
+    [string]$Username,
+    [SecureString]$Password,
     # Quick low-load baseline run before the main run
     [switch]$Baseline,
     # Skip k6/backend availability checks
     [switch]$SkipChecks
 )
+
+# Opsi prompt-first: kredensial selalu ditanyakan tiap run, KECUALI sudah
+# diberikan lewat parameter. Password TIDAK dibaca dari .env - nilai
+# APP_DEFAULT_USER_PASSWORD di .env bisa saja stale, jadi penguji mengetik
+# password terkini sendiri (input hidden). HATI-HATI salah ketik: 5 login
+# gagal mengunci akun selama 10 menit (login.max-attempts/lockout-minutes).
+if (-not $Username) {
+    $Username = Read-Host -Prompt "Load test username"
+}
+
+if (-not $Password) {
+    $Password = Read-Host -Prompt "Password for $Username (hidden)" -AsSecureString
+}
+
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
+$plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -60,8 +83,16 @@ if (-not $SkipChecks) {
 # Optional low-load baseline first — useful as the comparison point for the thesis
 if ($Baseline) {
     Write-Host "`n=== BASELINE run (10 VU / 30s) ===" -ForegroundColor Cyan
-    k6 run -e "BASE_URL=$BaseUrl" -e "WS_URL=$WsUrl" -e "VUS=10" -e "DURATION=30s" `
-        -e "K6_USERNAME=$Username" -e "K6_PASSWORD=$Password" $k6Script
+    $baselineArgs = @(
+        "-e", "BASE_URL=$BaseUrl",
+        "-e", "WS_URL=$WsUrl",
+        "-e", "VUS=10",
+        "-e", "DURATION=30s",
+        "-e", "K6_USERNAME=$Username",
+        "-e", "K6_PASSWORD=$plainPassword",
+        $k6Script
+    )
+    k6 run @baselineArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Baseline run FAILED its thresholds - fix before stressing further." -ForegroundColor Yellow
     }
@@ -75,9 +106,17 @@ $summaryFile = Join-Path $resultsDir "result-$stamp.json"
 Write-Host "`n=== MAIN run ($Vus VU / $Duration) ===" -ForegroundColor Cyan
 Write-Host "Summary will be exported to: $summaryFile" -ForegroundColor DarkGray
 
-k6 run -e "BASE_URL=$BaseUrl" -e "WS_URL=$WsUrl" -e "VUS=$Vus" -e "DURATION=$Duration" `
-    -e "K6_USERNAME=$Username" -e "K6_PASSWORD=$Password" `
-    --summary-export="$summaryFile" $k6Script
+$mainArgs = @(
+    "-e", "BASE_URL=$BaseUrl",
+    "-e", "WS_URL=$WsUrl",
+    "-e", "VUS=$Vus",
+    "-e", "DURATION=$Duration",
+    "-e", "K6_USERNAME=$Username",
+    "-e", "K6_PASSWORD=$plainPassword",
+    "--summary-export=$summaryFile",
+    $k6Script
+)
+k6 run @mainArgs
 $k6ExitCode = $LASTEXITCODE
 
 if ($k6ExitCode -ne 0) {
@@ -88,5 +127,7 @@ if ($k6ExitCode -ne 0) {
     Write-Host "For the thesis report: keep the JSON in perf/k6/results/ and the" -ForegroundColor DarkGray
     Write-Host "end-of-run summary table (latency p95/p99, error rate, WS connect time)." -ForegroundColor DarkGray
 }
+
+Remove-Variable plainPassword -ErrorAction SilentlyContinue
 
 exit $k6ExitCode
