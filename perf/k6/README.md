@@ -7,18 +7,20 @@ Tidak menargetkan jalur MQTT/ESP32 — untuk itu gunakan skrip Python paho terpi
 ## Prasyarat
 
 1. k6 terpasang: https://grafana.com/docs/k6/latest/set-up/install-k6/
-   (Windows: `winget install grafana.k6` atau `choco install k6`)
+   (Windows: `winget grafana.k6` atau `choco install k6`)
 2. Backend jalan (default `http://localhost:8045`), PostgreSQL + InfluxDB + Mosquitto aktif.
-3. Kredensial user test. Default `admin/admin123` — override lewat env jika beda.
+3. Kredensial user test — **tanpa default**. Ditanyakan lewat prompt (password hidden)
+   oleh runner `run-loadtest-admin.ps1` / `run-loadtest-user.ps1`.
 
 ## Menjalankan
 
 ```powershell
-# Default: 20 VU selama 1 menit ke localhost:8045
-k6 run perf/k6/dashboard-load.js
+# Cara disarankan - kredensial ditanyakan lewat prompt:
+.\run-loadtest-admin.ps1          # akun admin
+.\run-loadtest-user.ps1           # akun family (role USER)
 
-# Beban lebih besar, durasi lebih lama, backend di host lain
-k6 run -e VUS=50 -e DURATION=2m -e BASE_URL=http://192.168.1.10:8045 perf/k6/dashboard-load.js
+# Memanggil k6 langsung - kredensial WAJIB diberikan lewat -e:
+k6 run -e K6_USERNAME={user} -e K6_PASSWORD={pw} perf/k6/dashboard-load.js
 ```
 
 ## Variabel
@@ -29,7 +31,7 @@ k6 run -e VUS=50 -e DURATION=2m -e BASE_URL=http://192.168.1.10:8045 perf/k6/das
 | `WS_URL` | `ws://localhost:8045/ws` | Endpoint WebSocket STOMP |
 | `VUS` | `20` | Jumlah virtual user puncak |
 | `DURATION` | `1m` | Durasi plateau beban |
-| `K6_USERNAME` / `K6_PASSWORD` | `admin/admin123` | Kredensial login |
+| `K6_USERNAME` / `K6_PASSWORD` | *(wajib — tanpa default)* | Kredensial akun yang diuji |
 
 ## Threshold (gerbang pass/fail)
 
