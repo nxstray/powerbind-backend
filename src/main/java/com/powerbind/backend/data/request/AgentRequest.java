@@ -27,4 +27,11 @@ public class AgentRequest {
         private String role;    // "user" or "assistant"
         private String content;
     }
+
+    @Getter
+    @Setter
+    public static class Rename {
+        @NotBlank(message = "Title is required")
+        private String title;
+    }
 }
