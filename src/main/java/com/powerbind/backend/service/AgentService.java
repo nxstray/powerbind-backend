@@ -109,6 +109,29 @@ public class AgentService {
                 .toList();
     }
 
+    // Rename a conversation — ownership verified
+    @Transactional
+    public ConversationResponse renameConversation(String username, String conversationId, String title) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        Conversation conversation = findOwnedConversation(user, conversationId);
+
+        String trimmed = title == null ? "" : title.trim();
+        if (trimmed.isBlank()) {
+            throw new IllegalArgumentException("Title is required");
+        }
+        conversation.setTitle(trimmed.length() > TITLE_MAX_LENGTH
+                ? trimmed.substring(0, TITLE_MAX_LENGTH).trim() : trimmed);
+        conversationRepository.save(conversation);
+
+        return ConversationResponse.builder()
+                .id(conversation.getId().toString())
+                .title(conversation.getTitle())
+                .createdAt(conversation.getCreatedAt())
+                .updatedAt(conversation.getUpdatedAt())
+                .build();
+    }
+
     // Delete a conversation (and its messages, via cascading FK) — ownership verified
     @Transactional
     public void deleteConversation(String username, String conversationId) {
@@ -234,7 +257,7 @@ public class AgentService {
         String now = LocalDateTime.now().format(FORMATTER);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("You are Powerbind AI, an intelligent energy advisor for a smart home system in Indonesia. ");
+        sb.append("You are Gemono, an intelligent energy advisor for a smart home system in Indonesia. ");
         sb.append("You help users understand electricity usage, identify waste, and optimize energy consumption. ");
         sb.append("Always respond in the same language the user uses (Indonesian or English). ");
         sb.append("Be concise, practical, and proactive about energy-saving recommendations.\n\n");

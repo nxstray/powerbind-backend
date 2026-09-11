@@ -27,7 +27,9 @@ public class AgentController {
 
     private final AgentService agentService;
 
-    // Text chat — streaming SSE, persisted into a conversation thread
+    // Text chat — streaming SSE, persisted into a conversation thread.
+    // Long-term memory extraction also runs here, but entirely in the background —
+    // there is no memory endpoint or UI, by design (see MemoryService).
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "Stream AI energy advisor response via SSE")
     public Flux<String> chat(
@@ -90,5 +92,16 @@ public class AgentController {
             @PathVariable("id") String id) {
         agentService.deleteConversation(username, id);
         return ResponseEntity.ok(ApiResponse.ok("Conversation deleted"));
+    }
+
+    // Rename a conversation
+    @PatchMapping("/conversations/{id}")
+    @Operation(summary = "Rename a conversation")
+    public ResponseEntity<ApiResponse<ConversationResponse>> renameConversation(
+            @AuthenticationPrincipal String username,
+            @PathVariable("id") String id,
+            @Valid @RequestBody AgentRequest.Rename request) {
+        return ResponseEntity.ok(ApiResponse.ok("Conversation renamed",
+                agentService.renameConversation(username, id, request.getTitle())));
     }
 }
