@@ -33,6 +33,10 @@ public class RefreshToken {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean revoked = false;
+
     // Automatically set createdAt before persisting — prevents null in DB
     @PrePersist
     public void prePersist() {

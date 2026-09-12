@@ -32,12 +32,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = authHeader.substring(7);
 
             if (jwtUtil.isTokenValid(token)) {
-                String email = jwtUtil.extractEmail(token);
+                String username = jwtUtil.extractUsername(token);
                 String role = jwtUtil.extractRole(token);
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
-                                email,
+                                username,
                                 null,
                                 List.of(new SimpleGrantedAuthority("ROLE_" + role))
                         );
@@ -47,5 +47,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        // stateless JWT auth needs to re-run on the async redispatch too —
+        // otherwise SecurityContext is empty when the SSE response gets committed,
+        // and AuthorizationFilter denies the redispatched request
+        return false;
     }
 }

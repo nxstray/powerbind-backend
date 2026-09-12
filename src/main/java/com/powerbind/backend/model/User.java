@@ -39,6 +39,20 @@ public class User {
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
+    // True until the user sets their own password for the first time.
+    // Every account starts on the shared default password from .env, so this
+    // forces a mandatory change before the account can be used normally.
+    @Column(name = "must_change_password", nullable = false)
+    @Builder.Default
+    private boolean mustChangePassword = true;
+
+    // Access level — drives ROLE_USER / ROLE_ADMIN authority in JwtAuthFilter.
+    // Stored as the enum name (VARCHAR) so it stays readable straight from SQL.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private Role role = Role.USER;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

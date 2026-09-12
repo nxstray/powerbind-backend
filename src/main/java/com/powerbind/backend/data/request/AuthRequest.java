@@ -1,6 +1,7 @@
 package com.powerbind.backend.data.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -28,5 +29,16 @@ public class AuthRequest {
     public static class UpdateProfile {
         @NotBlank(message = "Display name is required")
         private String displayName;
+    }
+
+    @Getter
+    @Setter
+    public static class ChangePassword {
+        @NotBlank(message = "Current password is required")
+        private String currentPassword;
+
+        @NotBlank(message = "New password is required")
+        @Size(min = 8, message = "New password must be at least 8 characters")
+        private String newPassword;
     }
 }

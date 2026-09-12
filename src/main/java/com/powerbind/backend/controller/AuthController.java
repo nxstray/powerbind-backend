@@ -56,4 +56,14 @@ public class AuthController {
             @Valid @RequestBody AuthRequest.UpdateProfile request) {
         return ResponseEntity.ok(ApiResponse.ok("Profile updated", authService.updateProfile(username, request)));
     }
+
+    // Called on first login (mustChangePassword = true) and available any time after —
+    // requires the current password, so it stays authenticated-only (no permitAll needed).
+    @PutMapping("/change-password")
+    @Operation(summary = "Change password — required on first login with the default password")
+    public ResponseEntity<ApiResponse<AuthResponse.Profile>> changePassword(
+            @AuthenticationPrincipal String username,
+            @Valid @RequestBody AuthRequest.ChangePassword request) {
+        return ResponseEntity.ok(ApiResponse.ok("Password changed", authService.changePassword(username, request)));
+    }
 }

@@ -23,10 +23,12 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(String username) {
+    // role is embedded as-is (e.g. "USER" / "ADMIN") — JwtAuthFilter turns it
+    // into the "ROLE_<role>" authority Spring Security checks against.
+    public String generateToken(String username, String role) {
         return Jwts.builder()
                 .subject(username)
-                .claim("role", "USER")
+                .claim("role", role)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getKey())
