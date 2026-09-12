@@ -1,11 +1,13 @@
 package com.powerbind.backend.service;
 
 import com.powerbind.backend.data.request.RoomRequest;
+import com.powerbind.backend.data.response.AnomalyEventResponse;
 import com.powerbind.backend.data.response.RoomResponse;
 import com.powerbind.backend.global.ResourceNotFoundException;
 import com.powerbind.backend.model.Room;
 import com.powerbind.backend.repository.RoomRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,7 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
     private final MqttPublisherService mqttPublisherService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     // Get all rooms with live status
     public List<RoomResponse.Detail> getAllRooms() {
@@ -60,12 +63,16 @@ public class RoomService {
     @Transactional
     public RoomResponse.Detail setRelay(UUID id, boolean relayOn) {
         Room room = findRoom(id);
+        boolean wasWasting = isWasting(room);
+
         room.setRelayOn(relayOn);
         room.setNoPresenceSeconds(0);
         room.setUpdatedAt(LocalDateTime.now());
         room = roomRepository.save(room);
 
         mqttPublisherService.publishRelayCommand(room.getMqttTopic(), relayOn);
+
+        publishAnomalyIfNewlyWasting(room, wasWasting);
 
         return toDetail(room);
     }
@@ -78,10 +85,14 @@ public class RoomService {
     }
 
     // Internal helper used by MqttMessageHandler to update room presence state
+        // Internal helper used by MqttMessageHandler to update room presence state
     @Transactional
     public Room updatePresence(String mqttTopic, boolean detected) {
         Room room = roomRepository.findByMqttTopic(mqttTopic)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found for topic: " + mqttTopic));
+
+        boolean wasWasting = isWasting(room);
+
         room.setPresenceDetected(detected);
         // Explicitly set updated_at manually to force the refresh
         room.setUpdatedAt(LocalDateTime.now());
@@ -100,12 +111,36 @@ public class RoomService {
             }
         }
 
-        return roomRepository.save(room);
+        room = roomRepository.save(room);
+
+        publishAnomalyIfNewlyWasting(room, wasWasting);
+
+        return room;
     }
 
     private Room findRoom(UUID id) {
         return roomRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found"));
+    }
+
+    // Real anomaly check — relay ON but room actually EMPTY, based on live DB state.
+    // Same definition already used to warn the AI in AgentService's system prompt.
+    private boolean isWasting(Room room) {
+        return room.isRelayOn() && !room.isPresenceDetected();
+    }
+
+    // Push only on the transition into a waste state, not on every tick while it
+    // continues — otherwise a room left on for minutes would spam a toast per MQTT
+    // message instead of notifying once when the waste actually begins.
+    private void publishAnomalyIfNewlyWasting(Room room, boolean wasWasting) {
+        if (wasWasting || !isWasting(room)) return;
+
+        messagingTemplate.convertAndSend("/topic/anomaly", AnomalyEventResponse.builder()
+                .roomId(room.getId().toString())
+                .roomName(room.getName())
+                .message(room.getName() + ": perangkat masih menyala meski ruangan kosong")
+                .detectedAt(LocalDateTime.now())
+                .build());
     }
 
     private RoomResponse.Detail toDetail(Room room) {

@@ -31,11 +31,11 @@ public class MqttMessageHandler {
 
         if (topic == null) return;
 
-        // Pisahkan log khusus agar tidak tercampur dengan log debug MQTT biasa
+        // Separate log messages from telemetry messages for easier reading in logs
         if (topic.startsWith("smart-home/logs")) {
             String roomNode = topic.substring(topic.lastIndexOf("/") + 1);
             log.info("[IOT-{}] {}", roomNode.toUpperCase(), payload);
-            return; // Selesai diproses
+            return; // Finish processing here; no further action needed for log messages
         }
 
         log.debug("[MQTT] Received on topic {}: {}", topic, payload);
@@ -76,7 +76,10 @@ public class MqttMessageHandler {
         try {
             String[] parts = payload.split(",");
             if (parts.length < 4) {
-                log.warn("[MQTT] Invalid power payload: {}", payload);
+                // not a telemetry reading — likely a stray/unrelated message that
+                // happened to land under this topic prefix; ignore quietly instead
+                // of warning, since a real device never sends anything else here
+                log.debug("[MQTT] Ignoring non-telemetry power payload: {}", payload);
                 return;
             }
 
