@@ -15,6 +15,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import reactor.core.publisher.Flux;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -74,12 +78,15 @@ public class GroqService {
 
         // WebClient's ServerSentEventHttpMessageReader already splits the SSE stream
         // into complete "data:" payloads and strips the prefix for us — each element
-        // here is already one full JSON chunk, no manual line-buffering needed
+        // here is already one full JSON chunk, no manual line-buffering needed.
+        // timeout(): kalau stream menggantung (tidak ada data 60 detik), batalkan
+        // dan lempar error — onErrorResume di bawah yang mengubahnya jadi pesan.
         return webClient.post()
                 .uri("/chat/completions")
                 .bodyValue(body)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .timeout(Duration.ofSeconds(60))
                 .filter(payload -> !payload.isBlank() && !"[DONE]".equals(payload.trim()))
                 .mapNotNull(this::extractDeltaContent)
                 .doOnError(e -> log.error("[Groq] Stream error: {}", e.getMessage()))
@@ -111,6 +118,7 @@ public class GroqService {
                 .bodyValue(body)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .timeout(Duration.ofSeconds(60))
                 .filter(chunk -> !chunk.isBlank())
                 .mapNotNull(this::extractDeltaContent)
                 .doOnError(e -> log.error("[Groq Vision] Stream error: {}", e.getMessage()))
@@ -118,7 +126,11 @@ public class GroqService {
                 .onErrorResume(e -> Flux.just("Maaf, AI Agent sedang mengalami kendala (Koneksi ke server Groq gagal)."));
     }
 
-    // Transcribe audio via Whisper — returns transcribed text
+    // Transcribe audio via Whisper — returns transcribed text.
+    // @CircuitBreaker/@Retry aktif via Spring AOP (panggilan dari luar bean,
+    // bukan internal this-call). Fallback menjaga perilaku lama: return "".
+    @Retry(name = "groq")
+    @CircuitBreaker(name = "groq", fallbackMethod = "transcribeFallback")
     public String transcribe(MultipartFile audioFile) {
         try {
             MultipartBodyBuilder builder = new MultipartBodyBuilder();
@@ -133,6 +145,9 @@ public class GroqService {
                     .body(BodyInserters.fromMultipartData(builder.build()))
                     .retrieve()
                     .bodyToMono(String.class)
+                    // Sebelumnya .block() polos — kalau Groq menggantung, thread
+                    // request ikut menggantung tanpa batas. Sekarang 30s max.
+                    .timeout(Duration.ofSeconds(30))
                     .block();
 
             // Extract text from JSON response: {"text": "..."}
@@ -148,9 +163,21 @@ public class GroqService {
         }
     }
 
+    // Fallback transcribe — dipanggil CircuitBreaker saat sirkuit terbuka
+    // (Groq down). Perilaku sama seperti catch lama: string kosong, bukan exception.
+    // Dipanggil via Spring AOP/reflection oleh Resilience4j — bukan static call,
+    // jadi @SuppressWarnings menekan warning JDT "never used locally".
+    @SuppressWarnings("unused")
+    private String transcribeFallback(MultipartFile audioFile, Throwable t) {
+        log.warn("[Groq Whisper] Transcription skipped (circuit open): {}", t.getMessage());
+        return "";
+    }
+
     // One-shot (non-streaming) completion forced into JSON output — used for background
     // tasks like memory extraction where we need a structured, parseable result rather
     // than a token stream. Returns the raw JSON string from the assistant, or null on failure.
+    @Retry(name = "groq")
+    @CircuitBreaker(name = "groq", fallbackMethod = "completeJsonFallback")
     public String completeJson(String systemPrompt, String userContent) {
         List<Map<String, Object>> messages = List.of(
                 Map.of("role", "system", "content", systemPrompt),
@@ -172,6 +199,8 @@ public class GroqService {
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(String.class)
+                    // Sama seperti transcribe(): block() polos → 30s max.
+                    .timeout(Duration.ofSeconds(30))
                     .block();
 
             if (response == null) return null;
@@ -182,6 +211,15 @@ public class GroqService {
             log.error("[Groq] JSON completion error: {}", e.getMessage());
             return null;
         }
+    }
+
+    // Fallback completeJson — circuit terbuka: null, sama seperti catch lama.
+    // Dipanggil via Spring AOP/reflection oleh Resilience4j — bukan static call,
+    // jadi @SuppressWarnings menekan warning JDT "never used locally".
+    @SuppressWarnings("unused")
+    private String completeJsonFallback(String systemPrompt, String userContent, Throwable t) {
+        log.warn("[Groq] JSON completion skipped (circuit open): {}", t.getMessage());
+        return null;
     }
 
     // extract content delta from one complete SSE line, using proper JSON parsing

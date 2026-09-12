@@ -76,12 +76,13 @@ public class AuthService {
         user.setLockedUntil(null);
         userRepository.save(user);
 
-        String accessToken = jwtUtil.generateToken(user.getUsername());
+        String accessToken = jwtUtil.generateToken(user.getUsername(), user.getRole().name());
         String refreshToken = generateRefreshToken(user);
 
         return AuthResponse.TokenPair.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
     }
 
@@ -111,11 +112,12 @@ public class AuthService {
         token.setRevoked(true);
         refreshTokenRepository.save(token);
 
-        String newAccessToken = jwtUtil.generateToken(token.getUser().getUsername());
+        String newAccessToken = jwtUtil.generateToken(token.getUser().getUsername(), token.getUser().getRole().name());
 
         return AuthResponse.TokenPair.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
+                .mustChangePassword(token.getUser().isMustChangePassword())
                 .build();
     }
 
@@ -131,11 +133,7 @@ public class AuthService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        return AuthResponse.Profile.builder()
-                .id(user.getId().toString())
-                .username(user.getUsername())
-                .displayName(user.getDisplayName())
-                .build();
+        return toProfile(user);
     }
 
     // Update display name
@@ -147,11 +145,36 @@ public class AuthService {
         user.setDisplayName(request.getDisplayName());
         userRepository.save(user);
 
-        return AuthResponse.Profile.builder()
-                .id(user.getId().toString())
-                .username(user.getUsername())
-                .displayName(user.getDisplayName())
-                .build();
+        return toProfile(user);
+    }
+
+    // Change password — requires the current password so a hijacked access token alone
+    // isn't enough to lock the real owner out. Also revokes every existing refresh token
+    // for this user: the old password may have been visible to others (shared default
+    // password case), so any session started under it is forced to log in again.
+    @Transactional
+    public AuthResponse.Profile changePassword(String username, AuthRequest.ChangePassword request) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Current password is incorrect");
+        }
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("New password must be different from the current password");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
+
+        // force re-login everywhere else — the old (possibly shared) password is dead now
+        refreshTokenRepository.deleteAllByUser(user);
+
+        log.info("[Auth] Password changed for user {}", username);
+
+        return toProfile(user);
     }
 
     // Generate and persist a new refresh token for a user
@@ -166,5 +189,15 @@ public class AuthService {
 
         refreshTokenRepository.save(token);
         return tokenValue;
+    }
+
+    private AuthResponse.Profile toProfile(User user) {
+        return AuthResponse.Profile.builder()
+                .id(user.getId().toString())
+                .username(user.getUsername())
+                .displayName(user.getDisplayName())
+                .mustChangePassword(user.isMustChangePassword())
+                .role(user.getRole().name())
+                .build();
     }
 }

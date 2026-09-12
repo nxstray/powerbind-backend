@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriBuilder;
+
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -49,7 +51,8 @@ public class PrometheusService {
             return (List<String>) entry.data();
         }
 
-        JsonNode body = fetch("/api/v1/label/__name__/values", builder -> {});
+        // getMetricNames()
+        JsonNode body = fetch("/api/v1/label/__name__/values", UriBuilder::build);
         List<String> names = new ArrayList<>();
         body.path("data").forEach(n -> names.add(n.asText()));
         Collections.sort(names);
@@ -86,6 +89,7 @@ public class PrometheusService {
         long endSec = System.currentTimeMillis() / 1000;
         long startSec = endSec - hours * 3600L;
 
+        // queryRange()
         JsonNode body = fetch("/api/v1/query_range", builder -> builder
                 // PromQL contains literal { } — passed as a URI variable like the
                 // Loki proxy does, so Spring never treats braces as URI templates.
@@ -102,12 +106,9 @@ public class PrometheusService {
         return result;
     }
 
-    private JsonNode fetch(String path, java.util.function.Consumer<org.springframework.web.util.UriBuilder> customizer) {
+    private JsonNode fetch(String path, java.util.function.Function<UriBuilder, java.net.URI> customizer) {
         JsonNode body = webClient.get()
-                .uri(uriBuilder -> {
-                    customizer.accept(uriBuilder);
-                    return uriBuilder.build();
-                })
+                .uri(uriBuilder -> customizer.apply(uriBuilder.path(path)))
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .timeout(HTTP_TIMEOUT)

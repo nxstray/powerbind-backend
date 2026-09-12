@@ -78,6 +78,24 @@ public class AgentService {
                 .doOnError(e -> log.error("[Agent] Stream failed for {}: {}", username, e.getMessage()));
     }
 
+    // Ephemeral one-shot Q&A for the Metrics page overlay — streams a Groq reply
+    // WITHOUT persisting anything: no Conversation, no ChatMessage rows, and no
+    // background memory extraction, so it never shows up in AgentPage history.
+    public Flux<String> quickAsk(String username, String message) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Reuse the same live-energy system prompt so the assistant can explain
+        // metric charts in the context of the actual house state.
+        List<Map<String, Object>> messages = List.of(
+                Map.of("role", "system", "content", buildSystemPrompt(user)),
+                Map.of("role", "user", "content", message));
+
+        log.info("[Agent] Quick-ask (ephemeral) from {}: {}", username, message);
+        return groqService.streamChat(messages)
+                .doOnError(e -> log.error("[Agent] Quick-ask failed for {}: {}", username, e.getMessage()));
+    }
+
     // List all conversations for the authenticated user, most recently updated first
     public List<ConversationResponse> getConversations(String username) {
         User user = userRepository.findByUsername(username)

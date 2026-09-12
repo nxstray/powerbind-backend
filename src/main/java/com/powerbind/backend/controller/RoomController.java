@@ -49,6 +49,16 @@ public class RoomController {
         return ResponseEntity.ok(ApiResponse.ok("Room updated", roomService.updateRoom(id, request)));
     }
 
+    // Manual override from the dashboard — user confirms via a validation dialog
+    // on the frontend before this is ever called.
+    @PatchMapping("/{id}/relay")
+    @Operation(summary = "Manually turn a room's relay on or off")
+    public ResponseEntity<ApiResponse<RoomResponse.Detail>> setRelay(
+            @PathVariable UUID id,
+            @Valid @RequestBody RoomRequest.RelayControl request) {
+        return ResponseEntity.ok(ApiResponse.ok("Relay updated", roomService.setRelay(id, request.getRelayOn())));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a room")
     public ResponseEntity<ApiResponse<Void>> deleteRoom(@PathVariable UUID id) {

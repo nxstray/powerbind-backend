@@ -153,7 +153,7 @@ docker compose down       # stop
 |---|---|---|
 | `.\run-test.ps1` | Default suite: **unit, functional, smoke, Cucumber BDD** (H2 in-memory DB — no external services needed) | Java + Maven |
 | `.\run-performance-test.ps1` | Only `@Tag("performance")` tests (30-user concurrent login load test, login performance) | Java + Maven |
-| `.\run-selenium-test.ps1 -Username <user> -Password <secure>` | Only `@Tag("ui")` Selenium tests (Login, Dashboard, AgentPage) | Backend **and** frontend already running; Chrome installed |
+| `.\run-selenium-test.ps1 -Username <user> -Password <secure>` | Only `@Tag("ui")` Selenium tests (Login, Dashboard, AgentPage, ChangePasswordModal, AnomalyToast, ERD, Log) | Backend **and** frontend already running; Chrome installed |
 | `.\run-allure.ps1 [-Clean]` | Generates & opens the **combined Allure report** (merges results from the other scripts, keeps trend history) | Allure CLI; run it *after* at least one test script |
 
 ```powershell

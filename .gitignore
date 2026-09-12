@@ -34,3 +34,6 @@ allure-report/
 # Spring Boot packaged jar
 *.jar
 *.war
+
+# Repomix generated bundles
+repomix-*.xml

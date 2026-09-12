@@ -20,11 +20,11 @@ public class MqttPublisherService {
     private final MessageChannel mqttOutboundChannel;
 
     public void publishRelayCommand(String mqttTopic, boolean relayOn) {
-        // use a dedicated "relay" namespace so this outbound command topic never
-    // falls under mqtt.topic.power's wildcard subscription and gets echoed
-    // back into handlePower() as telemetry
-    String roomSlug = mqttTopic.substring(mqttTopic.lastIndexOf('/') + 1);
-        String commandTopic = "smart-home/power/" + mqttTopic + "/set";
+        // use a dedicated "relay" namespace, keyed only by the room slug, so this
+        // outbound command topic never falls under mqtt.topic.power's wildcard
+        // subscription and gets echoed back into handlePower() as telemetry
+        String roomSlug = mqttTopic.substring(mqttTopic.lastIndexOf('/') + 1);
+        String commandTopic = "smart-home/relay/" + roomSlug + "/set";
         String payload = relayOn ? "ON" : "OFF";
 
         try {

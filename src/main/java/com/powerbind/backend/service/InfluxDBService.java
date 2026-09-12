@@ -32,12 +32,28 @@ public class InfluxDBService {
     @Value("${influxdb.org}")
     private String orgName;
 
+    // Validate hours parameter — prevent Flux injection via user-supplied range values
+    private int sanitizeHours(int hours) {
+        if (hours <= 0 || hours > 168) { // max 7 days
+            return 24;
+        }
+        return hours;
+    }
+
+    // Sanitize tag values — remove characters that could break Flux string literals
+    private String sanitizeTag(String value) {
+        if (value == null) return "unknown";
+        // Remove quotes and backslashes that could escape Flux string boundaries
+        return value.replaceAll("[\"\\\\]", "").trim();
+    }
+
     // Write a presence detection event to InfluxDB
     public void writePresence(String roomName, boolean detected) {
         try {
             WriteApiBlocking writeApi = influxDBClient.getWriteApiBlocking();
             Point point = Point.measurement("presence")
-                    .addTag("room", roomName)
+                    // Tags are written via Point API — not interpolated into Flux strings
+                    .addTag("room", sanitizeTag(roomName))
                     .addField("detected", detected ? 1 : 0)
                     .time(Instant.now(), WritePrecision.MS);
             writeApi.writePoint(point);
@@ -64,6 +80,9 @@ public class InfluxDBService {
 
     // Query power history for the last N hours — used for dashboard charts
     public List<DashboardResponse.PowerHistory> queryPowerHistory(int hours) {
+        // Sanitize hours to prevent injection via range parameter
+        int safeHours = sanitizeHours(hours);
+
         String flux = String.format(
             "from(bucket: \"%s\") " +
             "|> range(start: -%dh) " +
@@ -71,7 +90,7 @@ public class InfluxDBService {
             "|> filter(fn: (r) => r._field == \"watts\") " +
             "|> aggregateWindow(every: 15m, fn: mean, createEmpty: false) " +
             "|> yield(name: \"mean\")",
-            bucket, hours
+            bucket, safeHours
         );
 
         List<DashboardResponse.PowerHistory> result = new ArrayList<>();
@@ -86,7 +105,7 @@ public class InfluxDBService {
                         result.add(DashboardResponse.PowerHistory.builder()
                                 .timestamp(formatter.format(record.getTime()))
                                 .watts(Double.parseDouble(wattsVal.toString()))
-                                .kwh(0) // kWh aggregated separately
+                                .kwh(0)
                                 .build());
                     }
                 }
