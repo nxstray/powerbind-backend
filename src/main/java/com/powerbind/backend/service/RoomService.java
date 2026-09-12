@@ -85,7 +85,6 @@ public class RoomService {
     }
 
     // Internal helper used by MqttMessageHandler to update room presence state
-        // Internal helper used by MqttMessageHandler to update room presence state
     @Transactional
     public Room updatePresence(String mqttTopic, boolean detected) {
         Room room = roomRepository.findByMqttTopic(mqttTopic)
