@@ -1,0 +1,13 @@
+name: smoke-check
+
+# Placeholder CI check — intentionally red until a real pipeline replaces it.
+on: [pull_request]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke check (placeholder, expected to fail)
+        run: |
+          echo "Smoke check is not implemented yet — failing on purpose."
+          exit 1
