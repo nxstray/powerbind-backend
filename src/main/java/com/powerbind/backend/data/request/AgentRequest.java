@@ -34,4 +34,12 @@ public class AgentRequest {
         @NotBlank(message = "Title is required")
         private String title;
     }
+
+    // Ephemeral one-shot Q&A (Metrics page overlay) — streamed but never persisted
+    @Getter
+    @Setter
+    public static class QuickAsk {
+        @NotBlank(message = "Message is required")
+        private String message;
+    }
 }

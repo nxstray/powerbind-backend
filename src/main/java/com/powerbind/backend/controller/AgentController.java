@@ -56,6 +56,17 @@ public class AgentController {
         return ResponseEntity.ok(ApiResponse.ok(Map.of("text", text)));
     }
 
+    // Ephemeral Q&A for the Metrics page overlay — streamed but NOT persisted
+    // (no conversation rows, no memory extraction) so it never appears in the
+    // AgentPage history. Takes a plain JSON body { message }.
+    @PostMapping(value = "/quick-ask", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Stream a one-shot AI answer without saving conversation history")
+    public Flux<String> quickAsk(
+            @AuthenticationPrincipal String username,
+            @Valid @RequestBody AgentRequest.QuickAsk request) {
+        return agentService.quickAsk(username, request.getMessage());
+    }
+
     // Document chat — PDF/DOCX/TXT + text prompt, streaming SSE, persisted into a conversation thread
     @PostMapping(value = "/document", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "Stream AI response for document (PDF/DOCX) + text query")

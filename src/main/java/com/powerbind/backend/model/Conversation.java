@@ -3,18 +3,19 @@ package com.powerbind.backend.model;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "chat_messages")
+@Table(name = "conversations")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ChatMessage {
+public class Conversation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -24,19 +25,16 @@ public class ChatMessage {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Groups messages into a single conversation thread — replaces flat per-user history
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "conversation_id", nullable = false)
-    private Conversation conversation;
-
-    // "user" or "assistant"
+    // Auto-generated from the first user message, truncated to ~50 chars
     @Column(nullable = false)
-    private String role;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String content;
+    private String title;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    // Updated every time a new message is added — used to sort the dropdown by recency
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 }

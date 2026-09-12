@@ -6,6 +6,7 @@ import com.powerbind.backend.model.User;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -24,5 +25,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     // Explicitly delete every message in a conversation before deleting the conversation
     // itself — don't rely solely on the DB's ON DELETE CASCADE, since Hibernate's view of
     // the schema (ddl-auto) can drift from what Flyway actually applied.
+    // @Transactional is required here: unlike JpaRepository's built-in delete()/deleteAll(),
+    @Transactional
     void deleteByConversation(Conversation conversation);
 }
