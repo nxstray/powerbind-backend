@@ -1,0 +1,164 @@
+version: '3.8'
+
+# Usage:
+#   1. Copy this file into the backend repo root (replacing the old
+#      docker-compose.yml — its content (loki + grafana) is preserved below).
+#   2. Create a `.env` file in the backend repo root with the variables below
+#      (see SETUP.md for the full list).
+#   3. Run: docker compose up -d --build
+#
+# Startup order note: `depends_on` here only guarantees container *start*
+# order, not that Postgres/Redis/etc. are actually ready to accept
+# connections yet. If the backend fails to connect on first boot, just run
+# `docker compose restart backend` once more.
+
+services:
+  # ── Database & supporting infra ─────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: powerbind-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=powerbind
+      - POSTGRES_USER=${DB_USERNAME:-powerbind}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    ports:
+      # host 5433: native Postgres (dev) is still listening on 5432
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-powerbind}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: powerbind-redis
+    restart: unless-stopped
+    ports:
+      # host 6380: standalone redis (dev) is still listening on 6379
+      - "6380:6379"
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: powerbind-mosquitto
+    restart: unless-stopped
+    ports:
+      # host 1884: native Mosquitto service is still listening on 1883
+      - "1884:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: powerbind-influxdb
+    restart: unless-stopped
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_ADMIN_USER:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_ADMIN_PASSWORD:?INFLUXDB_ADMIN_PASSWORD must be set in .env}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-powerbind}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-smarthome}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:?INFLUXDB_TOKEN must be set in .env}
+    ports:
+      # host 8087: native InfluxDB (dev) is still listening on 8086
+      - "8087:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  # ── Observability (existing logs + new metrics) ─────────────────────────
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: powerbind-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: powerbind-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    # The backend runs as the "backend" service on the same network, so the
+    # scrape target in prometheus.yml uses the service name, not localhost.
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: powerbind-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+  # ── Application ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: powerbind-backend
+    restart: unless-stopped
+    ports:
+      - "8045:8045"
+    environment:
+      - DB_USERNAME=${DB_USERNAME:-powerbind}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/powerbind
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MQTT_BROKER_URL=tcp://mosquitto:1883
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:?INFLUXDB_TOKEN must be set in .env}
+      - INFLUXDB_ORG=${INFLUXDB_ORG:-powerbind}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-smarthome}
+      # Base URL only (no path) — matches logback-spring.xml and
+      # AdminLogController, which each append their own API path
+      - LOKI_URL=http://loki:3100
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
+      - GROQ_API_KEY=${GROQ_API_KEY:?GROQ_API_KEY must be set in .env}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      - APP_DEFAULT_USER_USERNAME=${APP_DEFAULT_USER_USERNAME:-admin}
+      - APP_DEFAULT_USER_PASSWORD=${APP_DEFAULT_USER_PASSWORD:?APP_DEFAULT_USER_PASSWORD must be set in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mosquitto:
+        condition: service_started
+      influxdb:
+        condition: service_started
+      loki:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8045}
+    container_name: powerbind-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:
+  influxdb-data:
+  prometheus-data:
+  grafana-data:
+  mosquitto-data:
