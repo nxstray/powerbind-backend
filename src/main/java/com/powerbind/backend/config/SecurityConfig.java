@@ -65,8 +65,8 @@ public class SecurityConfig {
                     "/swagger-ui/**",
                     "/swagger-ui.html"
                 ).permitAll()
-                // Actuator health check + Prometheus metrics scrape (isinya cuma
-                // angka metrik — request count, JVM memory, dll — bukan data user)
+                // Actuator health check + Prometheus metrics scrape (content is only
+                // metric numbers — request count, JVM memory, etc — not user data)
                 .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                 // Auth endpoints — login and register are public
                 .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh").permitAll()
