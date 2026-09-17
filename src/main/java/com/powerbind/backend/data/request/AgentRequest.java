@@ -35,11 +35,19 @@ public class AgentRequest {
         private String title;
     }
 
-    // Ephemeral one-shot Q&A (Metrics page overlay) — streamed but never persisted
+    // Ephemeral one-shot Q&A (Metrics page overlay) — streamed but never persisted.
+    // metrics/hours are optional context: when present the backend pulls the ACTUAL
+    // Prometheus data for those charts so the AI answers from real values, not guesses.
     @Getter
     @Setter
     public static class QuickAsk {
         @NotBlank(message = "Message is required")
         private String message;
+
+        // Metric names of the charts currently displayed (optional)
+        private List<String> metrics;
+
+        // Time range of the charts in hours (optional, clamped server-side)
+        private Integer hours;
     }
 }
