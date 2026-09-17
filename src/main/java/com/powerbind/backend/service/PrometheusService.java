@@ -87,7 +87,17 @@ public class PrometheusService {
         }
 
         long endSec = System.currentTimeMillis() / 1000;
-        long startSec = endSec - hours * 3600L;
+        // Align the query grid to fixed step boundaries so every evaluation for the
+        // same (metric, hours, step) samples the SAME timestamps. Without this the
+        // grid shifts a few seconds on every request (start = now - hours), so a
+        // label like "02:55" could be a different sample between polls — e.g. a
+        // pre-GC value on one poll and a post-GC value on the next (peak 108 MiB
+        // suddenly reading 2 MiB). The unaligned `end` keeps the newest point live.
+        long alignedStart = endSec - hours * 3600L;
+        alignedStart -= alignedStart % step;
+        // Effectively-final copies for the lambda below (UriBuilder customizer).
+        final long startSec = alignedStart;
+        final long endSecF = endSec;
 
         // queryRange()
         JsonNode body = fetch("/api/v1/query_range", builder -> builder
@@ -95,7 +105,7 @@ public class PrometheusService {
                 // Loki proxy does, so Spring never treats braces as URI templates.
                 .queryParam("query", "{query}")
                 .queryParam("start", startSec)
-                .queryParam("end", endSec)
+                .queryParam("end", endSecF)
                 .queryParam("step", step)
                 .build(promQl));
 
@@ -153,22 +163,31 @@ public class PrometheusService {
     }
 
     // Human-readable series name: the grouped label value when grouping (e.g.
-    // "heap"), else up to three "label=value" pairs (e.g. "area=heap, id=PS Eden
-    // Space"), else the bare metric name for label-less metrics.
+    // "heap"), else the full raw Prometheus label set, formatted like Grafana
+    // Explore's legend — e.g. {__name__="jvm_memory_used_bytes",
+    // application="powerbind-backend", area="heap", id="G1 Eden Space",
+    // instance="host.docker.internal:8045", job="powerbind-backend"}.
     static String deriveSeriesName(JsonNode labels, String groupBy, String metric) {
         if (groupBy != null) {
             String v = labels.path(groupBy).asText("");
             return v.isBlank() ? metric : v;
         }
-        List<String> pairs = new ArrayList<>();
-        Iterator<Map.Entry<String, JsonNode>> it = labels.fields();
-        while (it.hasNext() && pairs.size() < 3) {
-            Map.Entry<String, JsonNode> f = it.next();
-            String k = f.getKey();
-            if ("__name__".equals(k)) continue;
-            pairs.add(k + "=" + f.getValue().asText());
+
+        List<String> keys = new ArrayList<>();
+        labels.fieldNames().forEachRemaining(keys::add);
+        keys.remove("__name__");
+        Collections.sort(keys);
+        keys.add(0, "__name__"); // __name__ selalu tampil pertama, ala Grafana Explore
+
+        StringBuilder sb = new StringBuilder("{");
+        for (int i = 0; i < keys.size(); i++) {
+            String k = keys.get(i);
+            String v = "__name__".equals(k) ? metric : labels.path(k).asText("");
+            if (i > 0) sb.append(", ");
+            sb.append(k).append("=\"").append(v).append('"');
         }
-        return pairs.isEmpty() ? metric : String.join(", ", pairs);
+        sb.append('}');
+        return sb.toString();
     }
 
     private String sanitize(String value, Pattern pattern, String what) {
