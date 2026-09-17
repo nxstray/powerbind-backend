@@ -64,7 +64,7 @@ public class AgentController {
     public Flux<String> quickAsk(
             @AuthenticationPrincipal String username,
             @Valid @RequestBody AgentRequest.QuickAsk request) {
-        return agentService.quickAsk(username, request.getMessage());
+        return agentService.quickAsk(username, request);
     }
 
     // Document chat — PDF/DOCX/TXT + text prompt, streaming SSE, persisted into a conversation thread
