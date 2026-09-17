@@ -99,9 +99,28 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - grafana-data:/var/lib/grafana
+      # Dashboards as code — provisioned on startup from these read-only mounts
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
       - loki
+
+  # ── Code QA (SonarQube Community — free) ─────────────────────────────────
+  # UI: http://localhost:9000 (default login admin/admin, changed on first boot).
+  # Community image, actively maintained (9.9 LTS is EOL — upgrade per SonarSource
+  # notice). Data volume: fresh start on upgrade (H2 migration unsupported).
+  sonarqube:
+    image: sonarqube:community
+    container_name: powerbind-sonarqube
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    volumes:
+      - sonar-data:/opt/sonarqube/data
+      - sonar-extensions:/opt/sonarqube/extensions
 
   # ── Application ──────────────────────────────────────────────────────────
   backend:
@@ -162,3 +181,5 @@ volumes:
   prometheus-data:
   grafana-data:
   mosquitto-data:
+  sonar-data:
+  sonar-extensions:
