@@ -79,8 +79,8 @@ public class GroqService {
         // WebClient's ServerSentEventHttpMessageReader already splits the SSE stream
         // into complete "data:" payloads and strips the prefix for us — each element
         // here is already one full JSON chunk, no manual line-buffering needed.
-        // timeout(): kalau stream menggantung (tidak ada data 60 detik), batalkan
-        // dan lempar error — onErrorResume di bawah yang mengubahnya jadi pesan.
+        // timeout(): if the stream hangs (no data for 60 seconds), cancel it
+        // and throw an error — the onErrorResume below turns it into a message.
         return webClient.post()
                 .uri("/chat/completions")
                 .bodyValue(body)
@@ -127,8 +127,8 @@ public class GroqService {
     }
 
     // Transcribe audio via Whisper — returns transcribed text.
-    // @CircuitBreaker/@Retry aktif via Spring AOP (panggilan dari luar bean,
-    // bukan internal this-call). Fallback menjaga perilaku lama: return "".
+    // @CircuitBreaker/@Retry are active via Spring AOP (calls from outside the bean,
+    // not internal this-calls). The fallback preserves the old behavior: return "".
     @Retry(name = "groq")
     @CircuitBreaker(name = "groq", fallbackMethod = "transcribeFallback")
     public String transcribe(MultipartFile audioFile) {
@@ -145,8 +145,8 @@ public class GroqService {
                     .body(BodyInserters.fromMultipartData(builder.build()))
                     .retrieve()
                     .bodyToMono(String.class)
-                    // Sebelumnya .block() polos — kalau Groq menggantung, thread
-                    // request ikut menggantung tanpa batas. Sekarang 30s max.
+                    // Previously a plain .block() — if Groq hung, the request
+                    // thread would hang indefinitely. Now capped at 30s.
                     .timeout(Duration.ofSeconds(30))
                     .block();
 
@@ -163,10 +163,10 @@ public class GroqService {
         }
     }
 
-    // Fallback transcribe — dipanggil CircuitBreaker saat sirkuit terbuka
-    // (Groq down). Perilaku sama seperti catch lama: string kosong, bukan exception.
-    // Dipanggil via Spring AOP/reflection oleh Resilience4j — bukan static call,
-    // jadi @SuppressWarnings menekan warning JDT "never used locally".
+    // Fallback transcribe — called by the CircuitBreaker when the circuit is open
+    // (Groq down). Same behavior as the old catch: empty string, not an exception.
+    // Called via Spring AOP/reflection by Resilience4j — not a static call,
+    // so @SuppressWarnings silences the JDT "never used locally" warning.
     @SuppressWarnings("unused")
     private String transcribeFallback(MultipartFile audioFile, Throwable t) {
         log.warn("[Groq Whisper] Transcription skipped (circuit open): {}", t.getMessage());
@@ -199,7 +199,7 @@ public class GroqService {
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(String.class)
-                    // Sama seperti transcribe(): block() polos → 30s max.
+                    // Same as transcribe(): plain block() → 30s max.
                     .timeout(Duration.ofSeconds(30))
                     .block();
 
@@ -213,9 +213,9 @@ public class GroqService {
         }
     }
 
-    // Fallback completeJson — circuit terbuka: null, sama seperti catch lama.
-    // Dipanggil via Spring AOP/reflection oleh Resilience4j — bukan static call,
-    // jadi @SuppressWarnings menekan warning JDT "never used locally".
+    // Fallback completeJson — circuit open: null, same as the old catch.
+    // Called via Spring AOP/reflection by Resilience4j — not a static call,
+    // so @SuppressWarnings silences the JDT "never used locally" warning.
     @SuppressWarnings("unused")
     private String completeJsonFallback(String systemPrompt, String userContent, Throwable t) {
         log.warn("[Groq] JSON completion skipped (circuit open): {}", t.getMessage());
