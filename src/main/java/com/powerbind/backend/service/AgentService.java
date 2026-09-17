@@ -22,11 +22,15 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -38,6 +42,7 @@ public class AgentService {
 
     private final GroqService groqService;
     private final InfluxDBService influxDBService;
+    private final PrometheusService prometheusService;
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final DocumentService documentService;
@@ -49,6 +54,10 @@ public class AgentService {
     private static final int TITLE_MAX_LENGTH = 50;
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy HH:mm");
+
+    // Timestamps in the quick-ask metrics context are shown to the admin in the same
+    // timezone the charts use (Asia/Jakarta, matching the frontend / weather config).
+    private static final ZoneId TIME_ZONE = ZoneId.of("Asia/Jakarta");
 
     // Stream text chat with live energy context — persists into a conversation thread
     // and triggers background extraction of any durable facts worth remembering
@@ -78,22 +87,238 @@ public class AgentService {
                 .doOnError(e -> log.error("[Agent] Stream failed for {}: {}", username, e.getMessage()));
     }
 
+    // Dedicated persona for the Metrics page quick-ask overlay — explains system
+    // metrics (JVM/CPU/Prometheus). The live-energy persona refuses those topics.
+    private static final String METRICS_QUICK_ASK_SYSTEM_PROMPT = """
+            Kamu asisten monitoring sistem aplikasi PowerBind yang menjelaskan metrik
+            sistem (JVM memory, CPU usage, dan metrik Prometheus lainnya) secara
+            singkat dan jelas dalam Bahasa Indonesia.
+
+            Aturan:
+            1. Jawab pertanyaan tentang grafik/metrik di halaman System Metrics: arti
+               metriknya, kenapa nilainya naik/turun, dan apa yang wajar untuk
+               aplikasi Java Spring Boot.
+            2. Kalau ada pola yang tidak sehat (memory terus naik tanpa turun —
+               indikasi memory leak, atau CPU tinggi terus-menerus), sebutkan
+               kemungkinan penyebab dan cara mengeceknya.
+            3. Jangan menolak pertanyaan dengan alasan di luar topik listrik — untuk
+               endpoint ini kamu memang fokus ke metrik sistem.
+            4. Kalau pengguna bertanya soal listrik/energi rumah, tetap bantu seperti
+               biasa — tapi prioritas utamamu menjelaskan metrik sistem.
+
+            Data aktual:
+            5. Bila pesan pengguna menyertakan blok [DATA GRAFIK AKTUAL], itu adalah
+               data Prometheus NYATA dari grafik yang sedang dilihat admin. Gunakan
+               angka-angka itu dalam jawabanmu — jangan menebak atau mengarang nilai.
+            6. Saat menjelaskan dari data aktual, sebutkan secara eksplisit: kapan
+               puncak (peak) terjadi (jam berapa dan berapa nilainya), bagaimana
+               tren grafik (naik/turun/stabil) dan apa artinya secara operasional
+               (misal grafik terus naik = beban bertambah atau indikasi masalah).
+            7. Jelaskan dengan bahasa awam yang mudah dipahami — hindari jargon
+               teknis tanpa penjelasan, dan akui bila data aktual tidak tersedia.
+
+            Bahasa visual grafik (WAJIB dipakai saat menafsirkan pertanyaan admin):
+            8. Semua pertanyaan admin diasumsikan tentang grafik yang sedang tampil
+               di halaman System Metrics. Tafsirkan istilah dalam konteks grafik
+               dulu — JANGAN menjawab sebagai pertanyaan umum di luar konteks.
+               Contoh: "25 mil" berarti label 25 juta pada sumbu Y grafik (bukan
+               satuan jarak); "garis biru" berarti seri yang ditampilkan berwarna
+               biru pada grafik.
+            9. Label sumbu Y memakai gaya Grafana: "K" = ribu, "Mil" = juta
+               (million), "Bil" = miliar. Untuk metrik bytes sumbu Y memakai
+               satuan biner: Ki (kibibyte), Mi (mebibyte), Gi (gibibyte).
+            10. Warna garis pada grafik HANYA pembeda antar-seri (legend) — warna
+                TIDAK membawa arti threshold/level bahaya. Warna berbeda di antara
+                dua grafik juga bukan sesuatu yang bermakna. Jangan mengarang
+                makna warna.
+            11. Jawab pertanyaan yang diajukan — jangan beralih ke topik lain yang
+                tidak ditanyakan.
+            12. Blok [DATA GRAFIK AKTUAL] bisa berisi LEBIH DARI SATU metrik (metrik
+                yang disebut di pertanyaan admin + metrik yang sedang tampil di
+                grafik). Jawablah PERTANYAAN yang ditanya: kalau admin menanyakan
+                metrik tertentu, fokuskan jawaban pada data metrik itu — jangan
+                bercerita tentang metrik lain yang kebetulan ikut tersedia. Metrik
+                disebutkan eksplisit di setiap blok "Metrik: <nama>".
+            13. Pertanyaan admin bisa menyebut NAMA SERI, bukan nama metrik — misal
+                "G1 Eden Space", "Metaspace", atau "CodeCache" adalah seri di dalam
+                metrik jvm_memory_used_bytes. Periksa nama-nama seri pada blok data:
+                kalau pertanyaan menyebut nama seri yang ada di salah satu metrik,
+                jawablah PAKAI data seri itu (jam puncak, nilai, tren) — jangan
+                mengatakan data tidak ada kalau seri tersebut tersedia.
+            14. Gunakan satuan yang konsisten dengan yang tampil di grafik: angka
+                memori sebut dalam MiB/GiB (sesuai label chart), persentase CPU
+                dalam %, dan bila mengutip label sumbu Y (K/Mil/Bil) jelaskan
+                artinya (ribu/juta/miliar).
+
+            Format jawaban: 3-4 kalimat saja — padat tapi detail, menjelaskan arti
+            metriknya dan kesimpulan yang bisa diambil dari pola nilainya, tanpa
+            basa-basi pembuka, tanpa heading markdown.
+            """;
+
     // Ephemeral one-shot Q&A for the Metrics page overlay — streams a Groq reply
     // WITHOUT persisting anything: no Conversation, no ChatMessage rows, and no
     // background memory extraction, so it never shows up in AgentPage history.
-    public Flux<String> quickAsk(String username, String message) {
-        User user = userRepository.findByUsername(username)
+    public Flux<String> quickAsk(String username, AgentRequest.QuickAsk request) {
+        // Guard: unknown principal still 404s before reaching Groq (result unused —
+        // the metrics quick-ask persona has no per-user context).
+        userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Reuse the same live-energy system prompt so the assistant can explain
-        // metric charts in the context of the actual house state.
-        List<Map<String, Object>> messages = List.of(
-                Map.of("role", "system", "content", buildSystemPrompt(user)),
-                Map.of("role", "user", "content", message));
+        // Optional live context: only fetched when the frontend tells us which chart
+        // it is showing. A failed/unavailable Prometheus query degrades gracefully —
+        // the question is still answered, just without hard numbers.
+        // Optional live context: only fetched when the frontend tells us which chart
+        // it is showing. A failed/unavailable Prometheus query degrades gracefully —
+        // the question is still answered, just without hard numbers.
+        String userMessage = request.getMessage();
+        String context = buildMetricsContext(request.getMessage(), request.getMetrics(), request.getHours());
+        if (context != null) {
+            userMessage = userMessage + "\n\n" + context;
+        }
 
-        log.info("[Agent] Quick-ask (ephemeral) from {}: {}", username, message);
+        // Dedicated metrics persona (NOT the live-energy persona, which refuses
+        // JVM/CPU questions as out-of-scope). The user lookup stays as a guard so
+        // an unknown principal still 404s before reaching Groq.
+        List<Map<String, Object>> messages = List.of(
+                Map.of("role", "system", "content", METRICS_QUICK_ASK_SYSTEM_PROMPT),
+                Map.of("role", "user", "content", userMessage));
+
+        log.info("[Agent] Quick-ask (ephemeral) from {}: {}", username, request.getMessage());
         return groqService.streamChat(messages)
                 .doOnError(e -> log.error("[Agent] Quick-ask failed for {}: {}", username, e.getMessage()));
+    }
+
+    // Same palette & order as MetricsChart.vue (COLORS array) — lets the AI answer
+    // "the blue line" style questions by naming which series is which color.
+    private static final String[] SERIES_COLORS = {
+            "hijau", "kuning", "biru", "oranye", "merah", "ungu",
+            "hijau tua", "kuning muda", "oranye tua", "merah muda", "hijau muda", "pink",
+    };
+
+    // Turns the live Prometheus range data for the chart the admin is viewing into a
+    // compact text block appended to the question. Returns null when no metric was
+    // supplied or Prometheus is unreachable — quick-ask still works, just generic.
+    private String buildMetricsContext(String question, List<String> metrics, Integer hours) {
+        // Which metrics should the context cover? Start with the charts the frontend
+        // says are currently on screen (the fixed memory chart + the metric explorer),
+        // then add any metric name the question literally mentions (e.g. the admin
+        // asks about jvm_memory_used_bytes while the dropdown is on something else).
+        // Matching tolerates spaces: "jvm memory used bytes" must hit
+        // jvm_memory_used_bytes. Mentioned metrics come FIRST — they are what the
+        // admin is actually asking about. Capped to 4 to keep the prompt small;
+        // getMetricNames() is 5-min cached, queryRange() 30s cached.
+        LinkedHashSet<String> wanted = new LinkedHashSet<>();
+        if (metrics != null) {
+            for (String m : metrics) {
+                if (m != null && !m.isBlank()) wanted.add(m.trim());
+            }
+        }
+
+        try {
+            String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+            String qUnderscored = q.replaceAll("[\\s-]+", "_");
+            for (String name : prometheusService.getMetricNames()) {
+                if (name == null || wanted.contains(name)) continue;
+                String lower = name.toLowerCase(Locale.ROOT);
+                if (q.contains(lower) || qUnderscored.contains(lower)) {
+                    wanted.add(name);
+                    if (wanted.size() >= 4) break;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Agent] Quick-ask metric-name lookup failed: {}", e.getMessage());
+        }
+
+        if (wanted.isEmpty()) return null;
+
+        int safeHours = (hours == null || hours < 1 || hours > 24) ? 1 : hours;
+        int step = safeHours == 1 ? 60 : safeHours == 6 ? 240 : 900; // same step the UI charts use
+
+        DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm").withZone(TIME_ZONE);
+        long now = System.currentTimeMillis();
+        long rangeStart = now - safeHours * 3600_000L;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[DATA GRAFIK AKTUAL — jangan menebak, gunakan angka ini]\n");
+        sb.append("Rentang: ").append(safeHours).append(" jam terakhir (")
+          .append(timeFmt.format(Instant.ofEpochMilli(rangeStart))).append(" s/d ")
+          .append(timeFmt.format(Instant.ofEpochMilli(now))).append(")\n");
+
+        int fetched = 0;
+        for (String m : wanted) {
+            if (fetched >= 4) break;
+            Map<String, Object> data;
+            try {
+                data = prometheusService.queryRange(m, null, "avg", safeHours, step);
+            } catch (Exception e) {
+                log.warn("[Agent] Quick-ask context unavailable for {}: {}", m, e.getMessage());
+                continue;
+            }
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> series = (List<Map<String, Object>>) data.get("series");
+            if (series == null || series.isEmpty()) continue;
+
+            sb.append("\nMetrik: ").append(m).append("\n");
+            summarizeSeries(m, series, safeHours, timeFmt, sb);
+            fetched++;
+        }
+        return fetched > 0 ? sb.toString() : null;
+    }
+
+    // Appends the per-series summary (min/avg/max/now, peak time, trend) for one
+    // metric's range data. Limited to the 5 most active series (queryRange already
+    // sorts by peak) — enough context while keeping the prompt small.
+    private void summarizeSeries(String metric, List<Map<String, Object>> series,
+                                 int safeHours, DateTimeFormatter timeFmt, StringBuilder sb) {
+        sb.append("Rentang data: ").append(safeHours).append(" jam terakhir\n");
+        int shown = 0;
+        for (Map<String, Object> s : series) {
+            if (shown >= 5) break;
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> points = (List<Map<String, Object>>) s.get("points");
+            if (points == null || points.size() < 2) continue;
+
+            double first = ((Number) points.get(0).get("v")).doubleValue();
+            double last = ((Number) points.get(points.size() - 1).get("v")).doubleValue();
+            double min = Double.MAX_VALUE, max = -Double.MAX_VALUE, sum = 0;
+            long peakTime = 0;
+            for (Map<String, Object> p : points) {
+                double v = ((Number) p.get("v")).doubleValue();
+                min = Math.min(min, v);
+                if (v > max) { max = v; peakTime = (long) p.get("t"); }
+                sum += v;
+            }
+            double avg = sum / points.size();
+
+            String trend = last > first * 1.05 ? "NARIK NAIK" : last < first * 0.95 ? "TURUN" : "RELATIF STABIL";
+            String color = shown < SERIES_COLORS.length ? SERIES_COLORS[shown] : "warna lain";
+            sb.append("- Seri (garis ").append(color).append("): ").append(s.get("name")).append("\n");
+            sb.append("  Nilai: min ").append(formatMetricValue(metric, min))
+              .append(", avg ").append(formatMetricValue(metric, avg))
+              .append(", max ").append(formatMetricValue(metric, max))
+              .append(", sekarang ").append(formatMetricValue(metric, last)).append("\n");
+            sb.append("  Puncak (").append(formatMetricValue(metric, max)).append(") terjadi jam ")
+              .append(timeFmt.format(Instant.ofEpochMilli(peakTime))).append("\n");
+            sb.append("  Tren sepanjang rentang: ").append(trend).append("\n");
+            shown++;
+        }
+    }
+
+    // Human-readable value: bytes metrics get MiB/GiB formatting (binary units,
+    // matching the chart's Ki/Mi/Gi labels), ratios get percent, everything else is
+    // left as-is (truncated to 2 decimals).
+    static String formatMetricValue(String metric, double v) {
+        if (metric != null && metric.endsWith("_bytes")) {
+            if (v >= 1073741824) return String.format(Locale.ROOT, "%.2f GiB", v / 1073741824);
+            if (v >= 1048576) return String.format(Locale.ROOT, "%.2f MiB", v / 1048576);
+            if (v >= 1024) return String.format(Locale.ROOT, "%.2f KiB", v / 1024);
+            return String.format(Locale.ROOT, "%.0f B", v);
+        }
+        if (metric != null && (metric.endsWith("_ratio") || metric.endsWith("cpu_usage"))) {
+            return String.format(Locale.ROOT, "%.1f%%", v * 100);
+        }
+        return String.format(Locale.ROOT, "%.2f", v);
     }
 
     // List all conversations for the authenticated user, most recently updated first
