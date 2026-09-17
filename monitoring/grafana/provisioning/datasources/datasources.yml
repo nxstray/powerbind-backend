@@ -1,0 +1,21 @@
+# Provisioned datasources with FIXED UIDs so the dashboard JSON can reference
+# them by uid (see ../dashboards/powerbind-overview.json). If you previously added
+# Prometheus/Loki by hand in the Grafana UI, delete those duplicates — this file
+# replaces them and survives container recreation.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
