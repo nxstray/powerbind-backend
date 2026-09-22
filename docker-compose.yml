@@ -109,7 +109,13 @@ services:
   # ── Code QA (SonarQube Community — free) ─────────────────────────────────
   # UI: http://localhost:9000 (default login admin/admin, changed on first boot).
   # Community image, actively maintained (9.9 LTS is EOL — upgrade per SonarSource
-  # notice). Data volume: fresh start on upgrade (H2 migration unsupported).
+  # notice).
+  #
+  # Uses the shared Postgres instance instead of the embedded H2 database, so the
+  # "Embedded database should be used for evaluation purposes only" warning is gone
+  # and analysis history survives SonarQube version upgrades. The `sonar` database
+  # is created by the one-shot `sonar-db-init` service below (it also works when the
+  # postgres volume already exists, unlike /docker-entrypoint-initdb.d).
   sonarqube:
     image: sonarqube:community
     container_name: powerbind-sonarqube
@@ -118,9 +124,34 @@ services:
       - "9000:9000"
     environment:
       - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+      - SONAR_JDBC_URL=jdbc:postgresql://postgres:5432/sonar
+      - SONAR_JDBC_USERNAME=${DB_USERNAME:-powerbind}
+      - SONAR_JDBC_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set in .env}
     volumes:
       - sonar-data:/opt/sonarqube/data
       - sonar-extensions:/opt/sonarqube/extensions
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-shot: make sure the `sonar` database exists before SonarQube boots.
+  # Idempotent — safe to run on every `docker compose up`.
+  sonar-db-init:
+    image: postgres:16-alpine
+    container_name: powerbind-sonar-db-init
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGPASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        psql -h postgres -U ${DB_USERNAME:-powerbind} -d postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='sonar'" | grep -q 1 ||
+        createdb -h postgres -U ${DB_USERNAME:-powerbind} sonar
 
   # ── Application ──────────────────────────────────────────────────────────
   backend:
@@ -142,6 +173,11 @@ services:
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:?INFLUXDB_TOKEN must be set in .env}
       - INFLUXDB_ORG=${INFLUXDB_ORG:-powerbind}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-smarthome}
+      # Inside the compose network the backend must reach Prometheus by SERVICE
+      # NAME — its own "localhost" is the backend container, not Prometheus
+      # (the default in application.properties only works when the backend runs
+      # on the host via `mvn spring-boot:run`).
+      - PROMETHEUS_BASE_URL=http://prometheus:9090
       # Base URL only (no path) — matches logback-spring.xml and
       # AdminLogController, which each append their own API path
       - LOKI_URL=http://loki:3100
