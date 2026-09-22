@@ -22,7 +22,7 @@
 		<cucumber.version>7.20.1</cucumber.version>
 		<influxdb.version>6.12.0</influxdb.version>
 		<excludedGroups>requires-groq,performance,ui</excludedGroups>
-		<!-- SonarQube — server URL/project key live in run-sonar.ps1, not here -->
+		<!-- SonarQube - server URL/project key live in run-sonar.ps1, not here -->
 		<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 	</properties>
 
@@ -153,7 +153,7 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
-		<!-- Prometheus registry — dibutuhkan supaya Actuator meng-expose
+		<!-- Prometheus registry - dibutuhkan supaya Actuator meng-expose
 		     endpoint /actuator/prometheus (format metrik yang di-scrape Prometheus) -->
 		<dependency>
 			<groupId>io.micrometer</groupId>
@@ -321,8 +321,12 @@
 				<version>10.15.0</version>
 				<configuration>
 					<url>jdbc:postgresql://localhost:5432/powerbind</url>
-					<user>postgres</user>
-					<password>postgres</password>
+					<!-- Credentials come from the environment (the same POSTGRES_* variables
+					     the docker-compose stack uses) so no literal secret lives here
+					     (SonarQube xml:S2068). For a manual run pass them explicitly:
+					     mvn flyway:migrate -Denv.POSTGRES_USER=postgres -Denv.POSTGRES_PASSWORD=... -->
+					<user>${env.POSTGRES_USER}</user>
+					<password>${env.POSTGRES_PASSWORD}</password>
 					<locations>
 						<location>classpath:db/migration</location>
 					</locations>
@@ -372,10 +376,10 @@
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>
-			<!-- JaCoCo — records line/branch coverage while tests run.
+			<!-- JaCoCo - records line/branch coverage while tests run.
 			     append=false: jacoco.exec is ALWAYS overwritten, never merged, so
 			     SonarQube only ever sees coverage from the latest test run (safe with
-			     mvn verify WITHOUT clean — see the no-clean note in run-sonar.ps1). -->
+			     mvn verify WITHOUT clean - see the no-clean note in run-sonar.ps1). -->
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
@@ -407,7 +411,7 @@
 				</executions>
 			</plugin>
 
-			<!-- SonarQube scanner — run explicitly via .\run-sonar-backend.ps1.
+			<!-- SonarQube scanner - run explicitly via .\run-sonar-backend.ps1.
 			     Version 5.1+ required: SonarQube Server 2025.x rejects the old
 			     scanner bootstrap protocol of 5.0.x with "Not authorized". -->
 			<plugin>
