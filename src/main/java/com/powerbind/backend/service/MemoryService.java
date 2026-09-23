@@ -67,7 +67,7 @@ public class MemoryService {
 
         StringBuilder sb = new StringBuilder();
         sb.append("\nWHAT YOU REMEMBER ABOUT THIS USER (weave this in naturally during normal chat without\n");
-        sb.append("announcing it — but if the user directly asks whether you remember them, you CAN confirm\n");
+        sb.append("announcing it - but if the user directly asks whether you remember them, you CAN confirm\n");
         sb.append("you do and reference a couple of these, instead of denying it):\n");
         for (UserMemory m : memories) {
             sb.append("- ").append(m.getContent()).append("\n");
