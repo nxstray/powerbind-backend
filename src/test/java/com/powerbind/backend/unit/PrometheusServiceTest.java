@@ -75,7 +75,7 @@ class PrometheusServiceTest {
         return (List<Map<String, Object>>) series.get("points");
     }
 
-    // ---- deriveSeriesName (tested through queryRange â€” package-private helper) ----
+    // ---- deriveSeriesName (tested through queryRange - package-private helper) ----
 
     @Test
     @DisplayName("TC-UNIT-PROM-01 with groupBy: label value names the series; missing label falls back to the metric")
@@ -189,7 +189,7 @@ class PrometheusServiceTest {
         var result = service.queryRange("jvm_memory_used_bytes", "area", "sum", 1, 60);
 
         List<Map<String, Object>> series = seriesOf(result);
-        // peak 250 > peak 300? No â€” 300 is higher, so the raw series comes first
+        // peak 250 > peak 300? No - 300 is higher, so the raw series comes first
         assertEquals("jvm_memory_used_bytes", series.get(0).get("name")); // peak 300
         assertEquals("heap", series.get(1).get("name"));                  // peak 250
         List<Map<String, Object>> points = pointsOf(series.get(0));
@@ -200,7 +200,7 @@ class PrometheusServiceTest {
     @Test
     @DisplayName("TC-UNIT-PROM-12 non-numeric sample values are skipped, not crashing the parse")
     void queryRange_shouldSkipNonNumericSamples() {
-        // Note: "NaN" is a VALID double literal for Double.parseDouble â€” it must
+        // Note: "NaN" is a VALID double literal for Double.parseDouble - it must
         // be something truly unparseable to trigger the NumberFormatException path
         stubResponse(json("{\"data\":{\"result\":["
                 + "{\"metric\":{},\"values\":[[1690000000,\"abc\"],[1690000060,\"42\"]]}"
