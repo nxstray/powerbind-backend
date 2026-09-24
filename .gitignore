@@ -37,3 +37,7 @@ allure-report/
 
 # Repomix generated bundles
 repomix-*.xml
+
+# Generated SBOM (CycloneDX) and OWASP ZAP DAST reports
+sbom/
+zap/
