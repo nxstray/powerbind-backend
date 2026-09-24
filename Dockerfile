@@ -4,10 +4,10 @@ WORKDIR /app
 
 # copy pom.xml dulu supaya layer dependency ke-cache selama pom.xml nggak berubah
 COPY pom.xml .
-RUN mvn -B dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2 mvn -B dependency:go-offline
 
 COPY src ./src
-RUN mvn -B clean package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 mvn -B clean package -DskipTests
 
 # ── Stage 2: image runtime, cuma bawa jar hasil build ────────────────────
 FROM eclipse-temurin:17-jre-alpine
