@@ -134,8 +134,9 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
 
         // Dashboard content renders underneath, but the modal's fixed full-screen backdrop
         // intercepts any click before it reaches the page behind it.
+        WebElement logoutButton = driver.findElement(LOGOUT_BUTTON);
         assertThrows(ElementClickInterceptedException.class,
-                () -> driver.findElement(LOGOUT_BUTTON).click(),
+                logoutButton::click,
                 "Clicks on the dashboard behind the modal should be intercepted");
     }
 
@@ -181,7 +182,9 @@ class ChangePasswordModalSeleniumTest extends SeleniumTestBase {
                 .until(ExpectedConditions.invisibilityOfElementLocated(MODAL_TITLE));
         attachScreenshot("changepw-04-modal-closed");
 
-        new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Ringkasan']")));
+        assertTrue(new WebDriverWait(driver, Duration.ofSeconds(10))
+                .until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//h1[text()='Ringkasan']")))
+                .isDisplayed(),
+                "Dashboard should be visible again after a successful password change");
     }
 }

@@ -16,6 +16,8 @@ import java.util.Map;
 @Tag(name = "Logs", description = "Frontend log ingestion endpoint")
 public class LogController {
 
+    private static final String FRONTEND_LOG_MSG = "[FRONTEND] {}";
+
     @PostMapping
     @Operation(summary = "Receive a log entry from the frontend")
     public ResponseEntity<ApiResponse<Void>> receiveLog(@RequestBody Map<String, String> body) {
@@ -24,10 +26,10 @@ public class LogController {
 
         // Route to the correct log level so Loki labels are accurate
         switch (level) {
-            case "ERROR" -> log.error("[FRONTEND] {}", message);
-            case "WARN"  -> log.warn("[FRONTEND] {}", message);
-            case "DEBUG" -> log.debug("[FRONTEND] {}", message);
-            default      -> log.info("[FRONTEND] {}", message);
+            case "ERROR" -> log.error(FRONTEND_LOG_MSG, message);
+            case "WARN"  -> log.warn(FRONTEND_LOG_MSG, message);
+            case "DEBUG" -> log.debug(FRONTEND_LOG_MSG, message);
+            default      -> log.info(FRONTEND_LOG_MSG, message);
         }
 
         return ResponseEntity.ok(ApiResponse.ok("Log received"));

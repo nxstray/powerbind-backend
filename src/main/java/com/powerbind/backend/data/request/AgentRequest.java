@@ -8,6 +8,10 @@ import java.util.List;
 
 public class AgentRequest {
 
+    // Pure container of nested request DTOs — never instantiated itself.
+    private AgentRequest() {
+    }
+
     @Getter
     @Setter
     public static class Chat {

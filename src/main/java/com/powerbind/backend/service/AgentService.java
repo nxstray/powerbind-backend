@@ -40,6 +40,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AgentService {
 
+    private static final String USER_NOT_FOUND = "User not found";
+    private static final String KEY_ROLE = "role";
+    private static final String KEY_CONTENT = "content";
+    private static final String VALUE_SYSTEM = "system";
+    private static final String VALUE_USER = "user";
+
     private final GroqService groqService;
     private final InfluxDBService influxDBService;
     private final PrometheusService prometheusService;
@@ -63,7 +69,7 @@ public class AgentService {
     // and triggers background extraction of any durable facts worth remembering
     public Flux<String> chat(String username, AgentRequest.Chat request) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         Conversation conversation = resolveConversation(user, request.getConversationId(), request.getMessage());
 
@@ -162,7 +168,7 @@ public class AgentService {
         // Guard: unknown principal still 404s before reaching Groq (result unused —
         // the metrics quick-ask persona has no per-user context).
         userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         // Optional live context: only fetched when the frontend tells us which chart
         // it is showing. A failed/unavailable Prometheus query degrades gracefully —
@@ -180,8 +186,8 @@ public class AgentService {
         // JVM/CPU questions as out-of-scope). The user lookup stays as a guard so
         // an unknown principal still 404s before reaching Groq.
         List<Map<String, Object>> messages = List.of(
-                Map.of("role", "system", "content", METRICS_QUICK_ASK_SYSTEM_PROMPT),
-                Map.of("role", "user", "content", userMessage));
+                Map.of(KEY_ROLE, VALUE_SYSTEM, KEY_CONTENT, METRICS_QUICK_ASK_SYSTEM_PROMPT),
+                Map.of(KEY_ROLE, VALUE_USER, KEY_CONTENT, userMessage));
 
         log.info("[Agent] Quick-ask (ephemeral) from {}: {}", username, request.getMessage());
         return groqService.streamChat(messages)
@@ -195,44 +201,19 @@ public class AgentService {
             "hijau tua", "kuning muda", "oranye tua", "merah muda", "hijau muda", "pink",
     };
 
+    // Same step sizes the UI charts use per selected range (~240 points per chart).
+    private static final Map<Integer, Integer> STEP_BY_HOURS = Map.of(1, 60, 6, 240, 24, 900);
+
     // Turns the live Prometheus range data for the chart the admin is viewing into a
     // compact text block appended to the question. Returns null when no metric was
     // supplied or Prometheus is unreachable — quick-ask still works, just generic.
     private String buildMetricsContext(String question, List<String> metrics, Integer hours) {
-        // Which metrics should the context cover? Start with the charts the frontend
-        // says are currently on screen (the fixed memory chart + the metric explorer),
-        // then add any metric name the question literally mentions (e.g. the admin
-        // asks about jvm_memory_used_bytes while the dropdown is on something else).
-        // Matching tolerates spaces: "jvm memory used bytes" must hit
-        // jvm_memory_used_bytes. Mentioned metrics come FIRST — they are what the
-        // admin is actually asking about. Capped to 4 to keep the prompt small;
-        // getMetricNames() is 5-min cached, queryRange() 30s cached.
-        LinkedHashSet<String> wanted = new LinkedHashSet<>();
-        if (metrics != null) {
-            for (String m : metrics) {
-                if (m != null && !m.isBlank()) wanted.add(m.trim());
-            }
-        }
-
-        try {
-            String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
-            String qUnderscored = q.replaceAll("[\\s-]+", "_");
-            for (String name : prometheusService.getMetricNames()) {
-                if (name == null || wanted.contains(name)) continue;
-                String lower = name.toLowerCase(Locale.ROOT);
-                if (q.contains(lower) || qUnderscored.contains(lower)) {
-                    wanted.add(name);
-                    if (wanted.size() >= 4) break;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[Agent] Quick-ask metric-name lookup failed: {}", e.getMessage());
-        }
+        LinkedHashSet<String> wanted = requestedMetrics(metrics, question);
 
         if (wanted.isEmpty()) return null;
 
         int safeHours = (hours == null || hours < 1 || hours > 24) ? 1 : hours;
-        int step = safeHours == 1 ? 60 : safeHours == 6 ? 240 : 900; // same step the UI charts use
+        int step = STEP_BY_HOURS.getOrDefault(safeHours, 900); // ~240 points per chart
 
         DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm").withZone(TIME_ZONE);
         long now = System.currentTimeMillis();
@@ -245,25 +226,74 @@ public class AgentService {
           .append(timeFmt.format(Instant.ofEpochMilli(now))).append(")\n");
 
         int fetched = 0;
-        for (String m : wanted) {
-            if (fetched >= 4) break;
-            Map<String, Object> data;
-            try {
-                data = prometheusService.queryRange(m, null, "avg", safeHours, step);
-            } catch (Exception e) {
-                log.warn("[Agent] Quick-ask context unavailable for {}: {}", m, e.getMessage());
-                continue;
-            }
-
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> series = (List<Map<String, Object>>) data.get("series");
-            if (series == null || series.isEmpty()) continue;
+        for (String m : wanted.stream().limit(4).toList()) {
+            List<Map<String, Object>> series = fetchSeries(m, safeHours, step);
+            if (series.isEmpty()) continue;
 
             sb.append("\nMetrik: ").append(m).append("\n");
             summarizeSeries(m, series, safeHours, timeFmt, sb);
             fetched++;
         }
         return fetched > 0 ? sb.toString() : null;
+    }
+
+    // One Prometheus range fetch for the quick-ask context. Returns an empty list
+    // when the query fails or the metric has no series — both are logged and
+    // skipped so a single dead metric never blocks the rest of the context.
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> fetchSeries(String metric, int safeHours, int step) {
+        try {
+            Map<String, Object> data = prometheusService.queryRange(metric, null, "avg", safeHours, step);
+            List<Map<String, Object>> series = (List<Map<String, Object>>) data.get("series");
+            return series == null || series.isEmpty() ? List.of() : series;
+        } catch (Exception e) {
+            log.warn("[Agent] Quick-ask context unavailable for {}: {}", metric, e.getMessage());
+            return List.of();
+        }
+    }
+
+    // Which metrics should the context cover? Starts with the charts the frontend
+    // says are on screen (the fixed memory chart + the metric explorer), then adds
+    // any metric name the question literally mentions (e.g. the admin asks about
+    // jvm_memory_used_bytes while the dropdown is on something else). Matching
+    // tolerates spaces: "jvm memory used bytes" must hit jvm_memory_used_bytes.
+    // Mentioned metrics come FIRST — they are what the admin is asking about.
+    // Capped to 4 to keep the prompt small; getMetricNames() is 5-min cached,
+    // queryRange() 30s cached.
+    private LinkedHashSet<String> requestedMetrics(List<String> metrics, String question) {
+        LinkedHashSet<String> wanted = new LinkedHashSet<>();
+        if (metrics != null) {
+            for (String m : metrics) {
+                if (m != null && !m.isBlank()) wanted.add(m.trim());
+            }
+        }
+        addMentionedMetrics(wanted, question);
+        return wanted;
+    }
+
+    // Adds any Prometheus metric whose name the question literally mentions
+    // (space tolerant: "jvm memory used bytes" hits jvm_memory_used_bytes).
+    // Lookup failures are non-fatal — quick-ask still answers, just without the
+    // extra chart context.
+    private void addMentionedMetrics(LinkedHashSet<String> wanted, String question) {
+        try {
+            String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+            String qUnderscored = q.replaceAll("[\\s-]+", "_");
+            List<String> mentioned = new ArrayList<>();
+            for (String name : prometheusService.getMetricNames()) {
+                if (name != null && !wanted.contains(name) && mentionsMetric(q, qUnderscored, name)) {
+                    mentioned.add(name);
+                }
+            }
+            mentioned.stream().limit(Math.max(0, 4 - wanted.size())).forEach(wanted::add);
+        } catch (Exception e) {
+            log.warn("[Agent] Quick-ask metric-name lookup failed: {}", e.getMessage());
+        }
+    }
+
+    private boolean mentionsMetric(String q, String qUnderscored, String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        return q.contains(lower) || qUnderscored.contains(lower);
     }
 
     // Appends the per-series summary (min/avg/max/now, peak time, trend) for one
@@ -273,36 +303,57 @@ public class AgentService {
                                  int safeHours, DateTimeFormatter timeFmt, StringBuilder sb) {
         sb.append("Rentang data: ").append(safeHours).append(" jam terakhir\n");
         int shown = 0;
-        for (Map<String, Object> s : series) {
-            if (shown >= 5) break;
+        for (int i = 0; i < Math.min(5, series.size()); i++) {
+            Map<String, Object> s = series.get(i);
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> points = (List<Map<String, Object>>) s.get("points");
             if (points == null || points.size() < 2) continue;
 
-            double first = ((Number) points.get(0).get("v")).doubleValue();
-            double last = ((Number) points.get(points.size() - 1).get("v")).doubleValue();
-            double min = Double.MAX_VALUE, max = -Double.MAX_VALUE, sum = 0;
-            long peakTime = 0;
-            for (Map<String, Object> p : points) {
-                double v = ((Number) p.get("v")).doubleValue();
-                min = Math.min(min, v);
-                if (v > max) { max = v; peakTime = (long) p.get("t"); }
-                sum += v;
-            }
-            double avg = sum / points.size();
-
-            String trend = last > first * 1.05 ? "NARIK NAIK" : last < first * 0.95 ? "TURUN" : "RELATIF STABIL";
-            String color = shown < SERIES_COLORS.length ? SERIES_COLORS[shown] : "warna lain";
-            sb.append("- Seri (garis ").append(color).append("): ").append(s.get("name")).append("\n");
-            sb.append("  Nilai: min ").append(formatMetricValue(metric, min))
-              .append(", avg ").append(formatMetricValue(metric, avg))
-              .append(", max ").append(formatMetricValue(metric, max))
-              .append(", sekarang ").append(formatMetricValue(metric, last)).append("\n");
-            sb.append("  Puncak (").append(formatMetricValue(metric, max)).append(") terjadi jam ")
-              .append(timeFmt.format(Instant.ofEpochMilli(peakTime))).append("\n");
-            sb.append("  Tren sepanjang rentang: ").append(trend).append("\n");
+            appendSeriesSummary(metric, s, seriesStats(points), timeFmt, shown, sb);
             shown++;
         }
+    }
+
+    // One series' aggregates: endpoints, min/max (with the epoch-millis of the max
+    // point) and the mean over the sampled points.
+    private record SeriesStats(double first, double last, double min, double max, double avg, long peakTime) { }
+
+    private SeriesStats seriesStats(List<Map<String, Object>> points) {
+        double first = ((Number) points.get(0).get("v")).doubleValue();
+        double last = ((Number) points.get(points.size() - 1).get("v")).doubleValue();
+        double min = Double.MAX_VALUE;
+        double max = -Double.MAX_VALUE;
+        double sum = 0;
+        long peakTime = 0;
+        for (Map<String, Object> p : points) {
+            double v = ((Number) p.get("v")).doubleValue();
+            min = Math.min(min, v);
+            if (v > max) { max = v; peakTime = (long) p.get("t"); }
+            sum += v;
+        }
+        return new SeriesStats(first, last, min, max, sum / points.size(), peakTime);
+    }
+
+    private String trendLabel(double first, double last) {
+        if (last > first * 1.05) return "NARIK NAIK";
+        if (last < first * 0.95) return "TURUN";
+        return "RELATIF STABIL";
+    }
+
+    // Renders one series' block: colored legend line, min/avg/max/now, peak time
+    // and the overall trend across the range.
+    private void appendSeriesSummary(String metric, Map<String, Object> s, SeriesStats st,
+                                     DateTimeFormatter timeFmt, int index, StringBuilder sb) {
+        String trend = trendLabel(st.first(), st.last());
+        String color = index < SERIES_COLORS.length ? SERIES_COLORS[index] : "warna lain";
+        sb.append("- Seri (garis ").append(color).append("): ").append(s.get("name")).append("\n");
+        sb.append("  Nilai: min ").append(formatMetricValue(metric, st.min()))
+          .append(", avg ").append(formatMetricValue(metric, st.avg()))
+          .append(", max ").append(formatMetricValue(metric, st.max()))
+          .append(", sekarang ").append(formatMetricValue(metric, st.last())).append("\n");
+        sb.append("  Puncak (").append(formatMetricValue(metric, st.max())).append(") terjadi jam ")
+          .append(timeFmt.format(Instant.ofEpochMilli(st.peakTime()))).append("\n");
+        sb.append("  Tren sepanjang rentang: ").append(trend).append("\n");
     }
 
     // Human-readable value: bytes metrics get MiB/GiB formatting (binary units,
@@ -324,7 +375,7 @@ public class AgentService {
     // List all conversations for the authenticated user, most recently updated first
     public List<ConversationResponse> getConversations(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         return conversationRepository.findByUserOrderByUpdatedAtDesc(user).stream()
                 .map(c -> ConversationResponse.builder()
@@ -339,7 +390,7 @@ public class AgentService {
     // Fetch all messages within a single conversation, oldest first — ownership verified
     public List<ChatMessageResponse> getConversationMessages(String username, String conversationId) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
         Conversation conversation = findOwnedConversation(user, conversationId);
 
         return chatMessageRepository.findByConversationOrderByCreatedAtAsc(conversation).stream()
@@ -356,7 +407,7 @@ public class AgentService {
     @Transactional
     public ConversationResponse renameConversation(String username, String conversationId, String title) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
         Conversation conversation = findOwnedConversation(user, conversationId);
 
         String trimmed = title == null ? "" : title.trim();
@@ -379,7 +430,7 @@ public class AgentService {
     @Transactional
     public void deleteConversation(String username, String conversationId) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
         Conversation conversation = findOwnedConversation(user, conversationId);
         // Delete messages explicitly first — don't rely solely on the DB's ON DELETE CASCADE
         chatMessageRepository.deleteByConversation(conversation);
@@ -404,7 +455,7 @@ public class AgentService {
     // Chat with document context — extracts text from PDF/DOCX and injects into prompt, persists thread
     public Flux<String> documentChat(String username, String userMessage, MultipartFile documentFile, String conversationId) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         String extractedText = documentService.extractText(documentFile);
 
@@ -426,8 +477,8 @@ public class AgentService {
         systemPrompt += "\nAnswer the user's question using the document content above when relevant.";
 
         List<Map<String, Object>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", systemPrompt));
-        messages.add(Map.of("role", "user", "content", userMessage));
+        messages.add(Map.of(KEY_ROLE, VALUE_SYSTEM, KEY_CONTENT, systemPrompt));
+        messages.add(Map.of(KEY_ROLE, VALUE_USER, KEY_CONTENT, userMessage));
 
         log.info("[Agent] Document query on file: {}", documentFile.getOriginalFilename());
 
@@ -552,15 +603,15 @@ public class AgentService {
     // Assemble message list: system prompt + conversation history + current message
     private List<Map<String, Object>> buildMessages(String systemPrompt, AgentRequest.Chat request) {
         List<Map<String, Object>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", systemPrompt));
+        messages.add(Map.of(KEY_ROLE, VALUE_SYSTEM, KEY_CONTENT, systemPrompt));
 
         if (request.getHistory() != null) {
             for (AgentRequest.Turn turn : request.getHistory()) {
-                messages.add(Map.of("role", turn.getRole(), "content", turn.getContent()));
+                messages.add(Map.of(KEY_ROLE, turn.getRole(), KEY_CONTENT, turn.getContent()));
             }
         }
 
-        messages.add(Map.of("role", "user", "content", request.getMessage()));
+        messages.add(Map.of(KEY_ROLE, VALUE_USER, KEY_CONTENT, request.getMessage()));
         return messages;
     }
 }

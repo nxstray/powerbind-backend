@@ -19,14 +19,14 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// Excluded from normal `mvn test` runs via the "ui" tag — requires backend + frontend
+// Excluded from normal `mvn test` runs via the "ui" tag - requires backend + frontend
 // already running. Run explicitly with:
 //   mvn test -Dtest=MetricsPageSeleniumTest -DexcludedGroups=
 // or via .\run-selenium-test.ps1 (runs every @Tag("ui") suite).
 //
 // The account behind -Dselenium.username/-Dselenium.password MUST be an ADMIN:
 // /metrics is router-guarded and /api/admin/metrics/* is hasRole('ADMIN') gated.
-// Prometheus being down does NOT fail these tests — the page still renders its
+// Prometheus being down does NOT fail these tests - the page still renders its
 // header, range selector and the Ask Gemono panel regardless of chart data.
 @DisplayName("UI Test (metrics)")
 @Tag("ui")
@@ -54,7 +54,7 @@ class MetricsPageSeleniumTest extends SeleniumTestBase {
         return driver.findElement(ASK_PANEL);
     }
 
-    // The typewriter greeting takes ~1s to spell out — wait until it starts
+    // The typewriter greeting takes ~1s to spell out - wait until it starts
     private void waitForGreeting() {
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(d -> d.findElement(ASK_PANEL).getText().contains("Halo,"));
@@ -138,7 +138,7 @@ class MetricsPageSeleniumTest extends SeleniumTestBase {
         // the X close button is the only button in the panel's header row
         driver.findElement(By.xpath(
                 "//aside[.//p[normalize-space()='Ask Gemono']]//div[contains(@class,'border-b')]//button")).click();
-        // NOTE: use ASK_PANEL (not cssSelector("aside")) — the page has TWO asides
+        // NOTE: use ASK_PANEL (not cssSelector("aside")) - the page has TWO asides
         // (nav sidebar first, Ask Gemono panel second) and only the panel's inline
         // width animates between 320px and 0px.
         new WebDriverWait(driver, Duration.ofSeconds(5))
@@ -176,7 +176,7 @@ class MetricsPageSeleniumTest extends SeleniumTestBase {
         input.sendKeys("Sebut singkat: apa itu jvm_memory_used_bytes?");
         driver.findElement(By.xpath("//aside//form//button[@type='submit']")).click();
 
-        // user bubble — blue rounded pill containing the sent text
+        // user bubble - blue rounded pill containing the sent text
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(d -> !d.findElements(
                         By.xpath("//aside//p[contains(@class,'bg-[#0f8cd5]')][contains(.,'Sebut singkat')]")
@@ -186,6 +186,9 @@ class MetricsPageSeleniumTest extends SeleniumTestBase {
         // assistant reply eventually appears below it (streaming cursor may still blink)
         new WebDriverWait(driver, Duration.ofSeconds(30))
                 .until(d -> d.findElement(ASK_PANEL).getText().length() > "Sebut singkat: apa itu jvm_memory_used_bytes?".length());
+        assertTrue(askPanel().getText().contains("Sebut singkat: apa itu jvm_memory_used_bytes?"),
+                "The user bubble must be visible in the panel");
+        assertFalse(askPanel().getText().isBlank(), "Panel must contain the streamed reply");
         attachScreenshot("metrics-09-reply-streamed");
     }
 }

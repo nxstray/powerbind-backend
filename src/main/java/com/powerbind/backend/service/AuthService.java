@@ -17,13 +17,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    private static final String USER_NOT_FOUND = "User not found";
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -47,7 +52,7 @@ public class AuthService {
 
         // Check if account is currently locked
         if (user.getLockedUntil() != null && LocalDateTime.now().isBefore(user.getLockedUntil())) {
-            long minutesLeft = java.time.Duration.between(LocalDateTime.now(), user.getLockedUntil()).toMinutes() + 1;
+            long minutesLeft = Duration.between(ZonedDateTime.now(), user.getLockedUntil().atZone(ZoneId.systemDefault())).toMinutes() + 1;
             throw new AccountLockedException(
                 "Account locked due to too many failed attempts. Try again in " + minutesLeft + " minutes."
             );
@@ -131,7 +136,7 @@ public class AuthService {
     // Get current user profile
     public AuthResponse.Profile getProfile(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         return toProfile(user);
     }
@@ -140,7 +145,7 @@ public class AuthService {
     @Transactional
     public AuthResponse.Profile updateProfile(String username, AuthRequest.UpdateProfile request) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         user.setDisplayName(request.getDisplayName());
         userRepository.save(user);
@@ -155,7 +160,7 @@ public class AuthService {
     @Transactional
     public AuthResponse.Profile changePassword(String username, AuthRequest.ChangePassword request) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
             throw new IllegalArgumentException("Current password is incorrect");

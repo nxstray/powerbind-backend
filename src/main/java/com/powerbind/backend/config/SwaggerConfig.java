@@ -13,13 +13,15 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SwaggerConfig {
 
+    private static final String BEARER_AUTH = "bearerAuth";
+
     @Bean
     public OpenAPI openAPI() {
         SecurityScheme bearerScheme = new SecurityScheme()
                 .type(SecurityScheme.Type.HTTP)
                 .scheme("bearer")
                 .bearerFormat("JWT")
-                .name("bearerAuth");
+                .name(BEARER_AUTH);
 
         return new OpenAPI()
                 .info(new Info()
@@ -27,8 +29,8 @@ public class SwaggerConfig {
                         .description("API documentation for Powerbind — IoT presence detection and power monitoring")
                         .version("1.0.0")
                         .contact(new Contact().name("Powerbind Team")))
-                .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
+                .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
                 .components(new Components()
-                        .addSecuritySchemes("bearerAuth", bearerScheme));
+                        .addSecuritySchemes(BEARER_AUTH, bearerScheme));
     }
 }

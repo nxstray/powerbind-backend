@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// Excluded from normal `mvn test` runs via the "ui" tag — requires backend + frontend
+// Excluded from normal `mvn test` runs via the "ui" tag - requires backend + frontend
 // already running. Run explicitly with:
 //   mvn test -Dtest=ErdPageSeleniumTest -DexcludedGroups=
 // or via .\run-selenium-test.ps1 (runs every @Tag("ui") suite).
@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("ui")
 class ErdPageSeleniumTest extends SeleniumTestBase {
 
-    // Floating toolbar (div.bottom-12) buttons in DOM order — the buttons carry no
+    // Floating toolbar (div.bottom-12) buttons in DOM order - the buttons carry no
     // title/aria attributes (labels live in the hover tooltip span), so position is
     // the stable handle. If a new tool is ever added to the toolbar, re-check this list.
     private static final int IDX_ZOOM_OUT = 1;
@@ -49,13 +49,13 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
     private static final By TABLE_BOX = By.cssSelector("[data-table]");
     private static final By RELATION_PATH = By.cssSelector("path[id^='erd-path-']");
     private static final By CODE_PANEL = By.cssSelector(".inset-y-0.right-0");
-    // AppTooltip no longer sets a native `title` — it renders a custom hover tooltip
+    // AppTooltip no longer sets a native `title` - it renders a custom hover tooltip
     // and exposes the label via `data-tooltip` on its own wrapper instead, so both this
     // and the explain panel locator below are matched via data attributes, not classes
     // or native title text, to stay stable across styling/layout changes.
     private static final By EXPLAIN_PANEL = By.cssSelector("[data-explain-panel]");
     // The data output container is always in the DOM (it animates to height 0 when
-    // closed — the old fixed h-80 class is gone), so "panel is open" is detected via
+    // closed - the old fixed h-80 class is gone), so "panel is open" is detected via
     // the resize grip below, which carries v-if="dataPanel.open".
     private static final By DATA_PANEL = By.cssSelector("div.relative.shrink-0");
     private static final By DATA_PANEL_GRIP = By.cssSelector("div.cursor-ns-resize");
@@ -72,13 +72,13 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
         waitUntilSchemaLoaded();
     }
 
-    // The canvas only renders table boxes once /api/admin/erd returns the schema —
+    // The canvas only renders table boxes once /api/admin/erd returns the schema -
     // if the request fails the page swaps to its error message instead.
     private void waitUntilSchemaLoaded() {
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(d -> !d.findElements(TABLE_BOX).isEmpty());
         assertTrue(driver.findElements(LOAD_ERROR).isEmpty(),
-                "ERD page shows its load error — is the selenium account an ADMIN and is the backend up?");
+                "ERD page shows its load error - is the selenium account an ADMIN and is the backend up?");
     }
 
     private WebElement tableHeader(String tableName) {
@@ -96,7 +96,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
         return tableHeader(tableName).findElement(By.xpath("ancestor::div[@data-table][1]"));
     }
 
-    // A column row (not the header) inside a table box — clicking one triggers the
+    // A column row (not the header) inside a table box - clicking one triggers the
     // box-level focus handler. Matched via the column name span + the row's
     // items-center class so the box/header divs never win the match.
     private WebElement columnRow(String tableName, String columnName) {
@@ -133,9 +133,9 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
         List<WebElement> tables = driver.findElements(TABLE_BOX);
         assertTrue(tables.size() >= 5,
                 "Expected the JPA entities to render as table boxes, got " + tables.size());
-        assertTrue(driver.findElements(By.xpath(
+        assertEquals(1, driver.findElements(By.xpath(
                         "//div[@data-table][.//div[@data-tooltip='Klik untuk lihat kode entity'][.//*[normalize-space(text())='users']]]"))
-                        .size() == 1,
+                        .size(),
                 "The 'users' table box should be on the canvas");
         assertFalse(driver.findElements(RELATION_PATH).isEmpty(),
                 "At least one relation cable (svg path) should connect the tables");
@@ -253,13 +253,13 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
         WebElement panel = new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.visibilityOfElementLocated(EXPLAIN_PANEL));
         String header = panel.getText();
-        assertTrue(header.contains("·"), "Panel header should show '<column> · <table>'");
+        assertTrue(header.contains("\u00B7"), "Panel header should show '<column> \u00B7 <table>'");
         // The badge is styled with CSS `uppercase`, so the rendered text Selenium
-        // reads back is "PRIMARY KEY"/"FOREIGN KEY" — compare case-insensitively.
+        // reads back is "PRIMARY KEY"/"FOREIGN KEY" - compare case-insensitively.
         String headerLower = header.toLowerCase();
         assertTrue(headerLower.contains("primary key") || headerLower.contains("foreign key"),
                 "Panel badge should classify the column kind, got: " + header);
-        // The body streams from Groq — its content depends on the API key, so only the
+        // The body streams from Groq - its content depends on the API key, so only the
         // three known UI states are asserted (streaming text / loading / error + retry)
         assertTrue(header.contains("Gemono sedang menyusun penjelasan")
                         || header.contains("Gagal menghubungi AI")
@@ -278,7 +278,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
     void erd_dataOutputPanel_shouldPreviewTableRows() {
         driver.findElement(DATA_OUTPUT_TAB).click();
 
-        // Don't just wait for the container to become "visible" — its height
+        // Don't just wait for the container to become "visible" - its height
         // animates in via a 300ms CSS transition (h-0 -> h-80) and the child is
         // overflow-hidden, so the container reports non-zero size (and thus
         // "visible") well before the placeholder text is actually un-clipped.
@@ -364,7 +364,7 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
         Assumptions.assumeTrue(nonAdminPass != null && !nonAdminPass.isBlank(),
                 "Skipped: -Dselenium.nonAdminPassword not provided (optional guard coverage)");
 
-        // The class @BeforeEach already logged the admin in — swap the session for a
+        // The class @BeforeEach already logged the admin in - swap the session for a
         // non-admin one by clearing storage and logging in through the UI again.
         ((JavascriptExecutor) driver).executeScript("window.localStorage.clear();");
         driver.get(FRONTEND_URL + "/login");

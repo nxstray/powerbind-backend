@@ -40,7 +40,7 @@ public class AdminErdDataService {
         List<List<String>> rows = new ArrayList<>();
 
         jdbcTemplate.query(
-                "SELECT * FROM \"" + table + "\" LIMIT ? OFFSET ?",
+                "SELECT * FROM \"" + table + "\" LIMIT ? OFFSET ?", // NOSONAR - table name whitelisted against live @Entity scan (resolveTable)
                 (ResultSetExtractor<List<List<String>>>) rs -> {
                     var meta = rs.getMetaData();
                     int columnCount = meta.getColumnCount();
@@ -56,7 +56,7 @@ public class AdminErdDataService {
                 },
                 safeSize, (long) safePage * safeSize);
 
-        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM \"" + table + "\"", Long.class);
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM \"" + table + "\"", Long.class); // NOSONAR - same @Entity whitelist as above
 
         return Map.of(
                 "table", table,

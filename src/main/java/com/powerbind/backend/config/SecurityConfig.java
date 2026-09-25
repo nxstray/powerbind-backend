@@ -16,6 +16,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.CrossOriginResourcePolicyHeaderWriter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -43,7 +44,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(AbstractHttpConfigurer::disable) // NOSONAR - stateless JWT API: auth rides in the Authorization header, no cookies/sessions to forge
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -55,6 +56,12 @@ public class SecurityConfig {
                     .maxAgeInSeconds(31536000))
                 .referrerPolicy(referrer -> referrer
                     .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                // ZAP rule 90004: without CORP a browser may embed this API's
+                // responses in any other site. SAME_SITE keeps the frontend
+                // (different port, same site) working while refusing other sites;
+                // switch to CROSS_ORIGIN only if a foreign site must embed them.
+                .crossOriginResourcePolicy(corp -> corp.policy(
+                    CrossOriginResourcePolicyHeaderWriter.CrossOriginResourcePolicy.SAME_SITE))
             )
             .authorizeHttpRequests(auth -> auth
                 // Swagger & OpenAPI documentation

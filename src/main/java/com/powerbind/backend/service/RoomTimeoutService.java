@@ -29,26 +29,23 @@ public class RoomTimeoutService {
 
         for (Room room : rooms) {
             // Only check for rooms that are marked as ON
-            if (room.isPresenceDetected() && room.getUpdatedAt() != null) {
-                
-                // Increase threshold to 15 seconds to allow for network jitter
-                if (room.getUpdatedAt().plusSeconds(30).isBefore(now)) {
-                    
-                    room.setPresenceDetected(false);
-                    room.setRelayOn(false);
-                    room.setNoPresenceSeconds(0);
-                    roomRepository.save(room);
+            // Increase threshold to 15 seconds to allow for network jitter
+            if (room.isPresenceDetected() && room.getUpdatedAt() != null
+                    && room.getUpdatedAt().plusSeconds(30).isBefore(now)) {
+                room.setPresenceDetected(false);
+                room.setRelayOn(false);
+                room.setNoPresenceSeconds(0);
+                roomRepository.save(room);
 
-                    RoomResponse.Status status = RoomResponse.Status.builder()
-                            .id(room.getId().toString())
-                            .name(room.getName())
-                            .presenceDetected(false)
-                            .relayOn(false)
-                            .build();
+                RoomResponse.Status status = RoomResponse.Status.builder()
+                        .id(room.getId().toString())
+                        .name(room.getName())
+                        .presenceDetected(false)
+                        .relayOn(false)
+                        .build();
 
-                    websocket.convertAndSend("/topic/presence", status);
-                    log.info("[Timeout] Room {} marked offline", room.getName());
-                }
+                websocket.convertAndSend("/topic/presence", status);
+                log.info("[Timeout] Room {} marked offline", room.getName());
             }
         }
     }

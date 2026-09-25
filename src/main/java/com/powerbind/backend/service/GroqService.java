@@ -29,6 +29,16 @@ import java.util.Map;
 @Service
 public class GroqService {
 
+    private static final String KEY_ROLE = "role";
+    private static final String KEY_CONTENT = "content";
+    private static final String VALUE_SYSTEM = "system";
+    private static final String VALUE_USER = "user";
+    private static final String KEY_MODEL = "model";
+    private static final String KEY_MESSAGES = "messages";
+    private static final String KEY_MAX_TOKENS = "max_tokens";
+    private static final String KEY_STREAM = "stream";
+    private static final String CHAT_COMPLETIONS_URI = "/chat/completions";
+
     private final WebClient webClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -62,17 +72,17 @@ public class GroqService {
 
     private List<Map<String, Object>> withNoEmojiInstruction(List<Map<String, Object>> messages) {
         List<Map<String, Object>> result = new ArrayList<>(messages);
-        result.add(Map.of("role", "system", "content", NO_EMOJI_INSTRUCTION));
+        result.add(Map.of(KEY_ROLE, VALUE_SYSTEM, KEY_CONTENT, NO_EMOJI_INSTRUCTION));
         return result;
     }
 
     // stream chat completion — text only
     public Flux<String> streamChat(List<Map<String, Object>> messages) {
         Map<String, Object> body = Map.of(
-                "model", model,
-                "messages", withNoEmojiInstruction(messages),
-                "max_tokens", maxTokens,
-                "stream", true,
+                KEY_MODEL, model,
+                KEY_MESSAGES, withNoEmojiInstruction(messages),
+                KEY_MAX_TOKENS, maxTokens,
+                KEY_STREAM, true,
                 "temperature", 0.7
         );
 
@@ -82,7 +92,7 @@ public class GroqService {
         // timeout(): if the stream hangs (no data for 60 seconds), cancel it
         // and throw an error — the onErrorResume below turns it into a message.
         return webClient.post()
-                .uri("/chat/completions")
+                .uri(CHAT_COMPLETIONS_URI)
                 .bodyValue(body)
                 .retrieve()
                 .bodyToFlux(String.class)
@@ -103,18 +113,18 @@ public class GroqService {
         );
 
         List<Map<String, Object>> messages = List.of(
-                Map.of("role", "user", "content", content)
+                Map.of(KEY_ROLE, VALUE_USER, KEY_CONTENT, content)
         );
 
         Map<String, Object> body = Map.of(
-                "model", visionModel,
-                "messages", withNoEmojiInstruction(messages),
-                "max_tokens", maxTokens,
-                "stream", true
+                KEY_MODEL, visionModel,
+                KEY_MESSAGES, withNoEmojiInstruction(messages),
+                KEY_MAX_TOKENS, maxTokens,
+                KEY_STREAM, true
         );
 
         return webClient.post()
-                .uri("/chat/completions")
+                .uri(CHAT_COMPLETIONS_URI)
                 .bodyValue(body)
                 .retrieve()
                 .bodyToFlux(String.class)
@@ -135,7 +145,7 @@ public class GroqService {
         try {
             MultipartBodyBuilder builder = new MultipartBodyBuilder();
             builder.part("file", audioFile.getResource());
-            builder.part("model", whisperModel);
+            builder.part(KEY_MODEL, whisperModel);
             builder.part("response_format", "json");
             builder.part("language", "id"); // Indonesian default, auto-detect if mixed
 
@@ -150,7 +160,8 @@ public class GroqService {
                     .timeout(Duration.ofSeconds(30))
                     .block();
 
-            // Extract text from JSON response: {"text": "..."}
+            // Pull the transcribed text out of the Whisper JSON payload, whose
+            // single field holds the plain transcript string.
             if (response != null && response.contains("\"text\"")) {
                 int start = response.indexOf("\"text\":\"") + 8;
                 int end = response.lastIndexOf("\"");
@@ -180,22 +191,22 @@ public class GroqService {
     @CircuitBreaker(name = "groq", fallbackMethod = "completeJsonFallback")
     public String completeJson(String systemPrompt, String userContent) {
         List<Map<String, Object>> messages = List.of(
-                Map.of("role", "system", "content", systemPrompt),
-                Map.of("role", "user", "content", userContent)
+                Map.of(KEY_ROLE, VALUE_SYSTEM, KEY_CONTENT, systemPrompt),
+                Map.of(KEY_ROLE, VALUE_USER, KEY_CONTENT, userContent)
         );
 
         Map<String, Object> body = Map.of(
-                "model", model,
-                "messages", messages,
-                "max_tokens", 400,
+                KEY_MODEL, model,
+                KEY_MESSAGES, messages,
+                KEY_MAX_TOKENS, 400,
                 "temperature", 0.2,
-                "stream", false,
+                KEY_STREAM, false,
                 "response_format", Map.of("type", "json_object")
         );
 
         try {
             String response = webClient.post()
-                    .uri("/chat/completions")
+                    .uri(CHAT_COMPLETIONS_URI)
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(String.class)
@@ -205,7 +216,7 @@ public class GroqService {
 
             if (response == null) return null;
             JsonNode content = objectMapper.readTree(response)
-                    .path("choices").path(0).path("message").path("content");
+                    .path("choices").path(0).path("message").path(KEY_CONTENT);
             return content.isTextual() ? content.asText() : null;
         } catch (Exception e) {
             log.error("[Groq] JSON completion error: {}", e.getMessage());
@@ -228,7 +239,7 @@ public class GroqService {
         try {
             JsonNode delta = objectMapper.readTree(json)
                     .path("choices").path(0).path("delta");
-            JsonNode content = delta.path("content");
+            JsonNode content = delta.path(KEY_CONTENT);
 
             return content.isTextual() ? content.asText() : null;
         } catch (Exception e) {

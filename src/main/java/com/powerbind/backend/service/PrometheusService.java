@@ -26,6 +26,7 @@ public class PrometheusService {
 
     // Metric names per Prometheus data model; label names cannot contain ':'.
     // Aggregation functions are whitelist-only (no free text reaches PromQL).
+    private static final String NAME_LABEL = "__name__";
     static final Pattern METRIC_NAME = Pattern.compile("^[a-zA-Z_:][a-zA-Z0-9_:]*$");
     static final Pattern LABEL_NAME = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
     private static final Set<String> ALLOWED_AGGS = Set.of("sum", "avg", "max");
@@ -61,8 +62,8 @@ public class PrometheusService {
     }
 
     // Range query for one metric, optionally aggregated by a label, shaped ready
-    // for the frontend chart: { query, series: [{ name, points: [{ t (epoch ms), v }] }] }
-    // sorted by peak value so the most active series render first.
+    // for the frontend chart: a query string plus a series list of timestamped
+    // points, sorted by peak value so the most active series render first.
     @SuppressWarnings("unchecked")
     public Map<String, Object> queryRange(String metric, String groupBy, String agg, int hours, int step) {
         String safeMetric = sanitize(metric, METRIC_NAME, "metric name");
@@ -175,14 +176,14 @@ public class PrometheusService {
 
         List<String> keys = new ArrayList<>();
         labels.fieldNames().forEachRemaining(keys::add);
-        keys.remove("__name__");
+        keys.remove(NAME_LABEL);
         Collections.sort(keys);
-        keys.add(0, "__name__"); // __name__ selalu tampil pertama, ala Grafana Explore
+        keys.add(0, NAME_LABEL); // __name__ selalu tampil pertama, ala Grafana Explore
 
         StringBuilder sb = new StringBuilder("{");
         for (int i = 0; i < keys.size(); i++) {
             String k = keys.get(i);
-            String v = "__name__".equals(k) ? metric : labels.path(k).asText("");
+            String v = NAME_LABEL.equals(k) ? metric : labels.path(k).asText("");
             if (i > 0) sb.append(", ");
             sb.append(k).append("=\"").append(v).append('"');
         }
