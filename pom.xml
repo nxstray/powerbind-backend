@@ -345,6 +345,7 @@
 							<artifactId>lombok</artifactId>
 						</exclude>
 					</excludes>
+					<jvmArguments>-Xms256m -Xmx1024m -XX:MaxMetaspaceSize=384m -Xss512k</jvmArguments>
 				</configuration>
 			</plugin>
 
