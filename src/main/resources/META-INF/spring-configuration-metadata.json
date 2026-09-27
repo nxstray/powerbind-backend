@@ -1,0 +1,161 @@
+{
+  "properties": [
+    {
+      "name": "app.default-user.username",
+      "type": "java.lang.String",
+      "defaultValue": "admin",
+      "description": "Username of the default account seeded by DataInitializer on the first startup."
+    },
+    {
+      "name": "app.default-user.password",
+      "type": "java.lang.String",
+      "description": "Password of the default account seeded by DataInitializer on the first startup."
+    },
+    {
+      "name": "app.family-users",
+      "type": "java.lang.String",
+      "description": "Comma-separated list of family member usernames seeded on the first startup."
+    },
+    {
+      "name": "cors.allowed-origins",
+      "type": "java.lang.String",
+      "description": "Comma-separated browser origins allowed by CORS. Use explicit origins, never a wildcard."
+    },
+    {
+      "name": "groq.api.url",
+      "type": "java.lang.String",
+      "description": "Base URL of the Groq OpenAI-compatible API."
+    },
+    {
+      "name": "groq.api.key",
+      "type": "java.lang.String",
+      "description": "API key used to authenticate requests to the Groq API."
+    },
+    {
+      "name": "groq.model",
+      "type": "java.lang.String",
+      "description": "Groq chat model used for text answers."
+    },
+    {
+      "name": "groq.vision.model",
+      "type": "java.lang.String",
+      "description": "Groq model used for image (vision) requests."
+    },
+    {
+      "name": "groq.whisper.model",
+      "type": "java.lang.String",
+      "description": "Groq Whisper model used for audio transcription."
+    },
+    {
+      "name": "groq.max-tokens",
+      "type": "java.lang.Integer",
+      "defaultValue": 1024,
+      "description": "Maximum number of tokens the model may generate per response."
+    },
+    {
+      "name": "influxdb.url",
+      "type": "java.lang.String",
+      "defaultValue": "http://localhost:8086",
+      "description": "Base URL of the InfluxDB server storing presence and power history."
+    },
+    {
+      "name": "influxdb.token",
+      "type": "java.lang.String",
+      "description": "InfluxDB API token used to write and query time-series data."
+    },
+    {
+      "name": "influxdb.org",
+      "type": "java.lang.String",
+      "defaultValue": "powerbind",
+      "description": "InfluxDB organisation name."
+    },
+    {
+      "name": "influxdb.bucket",
+      "type": "java.lang.String",
+      "defaultValue": "smarthome",
+      "description": "InfluxDB bucket that holds presence and power measurements."
+    },
+    {
+      "name": "jwt.secret",
+      "type": "java.lang.String",
+      "description": "HMAC-SHA256 secret used to sign JWTs. Must be at least 32 bytes long."
+    },
+    {
+      "name": "jwt.expiration",
+      "type": "java.lang.Long",
+      "description": "Access token lifetime in milliseconds."
+    },
+    {
+      "name": "jwt.refresh-expiration",
+      "type": "java.lang.Long",
+      "defaultValue": 604800000,
+      "description": "Refresh token lifetime in milliseconds."
+    },
+    {
+      "name": "login.max-attempts",
+      "type": "java.lang.Integer",
+      "defaultValue": 5,
+      "description": "Number of failed login attempts allowed before the account is locked."
+    },
+    {
+      "name": "login.lockout-minutes",
+      "type": "java.lang.Long",
+      "defaultValue": 10,
+      "description": "How long an account stays locked after too many failed logins, in minutes."
+    },
+    {
+      "name": "loki.url",
+      "type": "java.lang.String",
+      "defaultValue": "http://localhost:3100",
+      "description": "Loki base URL used by AdminLogController to proxy log queries."
+    },
+    {
+      "name": "mqtt.broker-url",
+      "type": "java.lang.String",
+      "defaultValue": "tcp://localhost:1883",
+      "description": "MQTT broker URL used for presence, power and device log messages."
+    },
+    {
+      "name": "mqtt.client-id",
+      "type": "java.lang.String",
+      "defaultValue": "powerbind-backend",
+      "description": "Client id prefix for the backend inbound and outbound MQTT adapters."
+    },
+    {
+      "name": "mqtt.topic.presence",
+      "type": "java.lang.String",
+      "defaultValue": "smart-home/presence/#",
+      "description": "MQTT topic pattern that carries presence messages."
+    },
+    {
+      "name": "mqtt.topic.power",
+      "type": "java.lang.String",
+      "defaultValue": "smart-home/power/#",
+      "description": "MQTT topic pattern that carries power telemetry messages."
+    },
+    {
+      "name": "mqtt.topic.logs",
+      "type": "java.lang.String",
+      "defaultValue": "smart-home/logs/#",
+      "description": "MQTT topic pattern that carries device log messages."
+    },
+    {
+      "name": "prometheus.base-url",
+      "type": "java.lang.String",
+      "defaultValue": "http://localhost:9090",
+      "description": "Prometheus base URL used by the admin Metrics page to query metric graphs."
+    },
+    {
+      "name": "rate.limit.max-requests",
+      "type": "java.lang.Integer",
+      "defaultValue": 30,
+      "description": "Number of requests allowed per client inside one rate-limit window."
+    },
+    {
+      "name": "rate.limit.window-seconds",
+      "type": "java.lang.Long",
+      "defaultValue": 60,
+      "description": "Length of the rate-limit window in seconds."
+    }
+  ]
+}
