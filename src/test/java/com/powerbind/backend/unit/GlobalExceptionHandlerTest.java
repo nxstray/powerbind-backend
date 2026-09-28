@@ -67,7 +67,8 @@ class GlobalExceptionHandlerTest {
     @DisplayName("TC-UNIT-GEH-04 unknown path maps to 404, not 500")
     void unknownResource_shouldReturn404() {
         ResponseEntity<ApiResponse<Void>> response =
-                handler.handleNoResourceFound(new NoResourceFoundException(HttpMethod.GET, "/api/does-not-exist"));
+                handler.handleNoResourceFound(
+                        new NoResourceFoundException(HttpMethod.GET, "/api/does-not-exist", "No static resource."));
 
         assertError(response, 404);
     }
