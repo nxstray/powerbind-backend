@@ -265,10 +265,11 @@
 		<!-- Allure reporting. allure-cucumber7-jvm sengaja TIDAK dipakai: adapter
 		     Cucumber dari Allure 2.x belum kompatibel dengan Cucumber 8 (lihat
 		     catatan di CucumberTestRunner), dan membiarkannya di classpath ikut
-		     menarik cucumber-core 7.x. -->
+		     menarik cucumber-core 7.x. Artifact-nya juga memakai nama baru:
+		     allure-junit5 sudah di-relocate menjadi allure-jupiter. -->
 		<dependency>
 			<groupId>io.qameta.allure</groupId>
-			<artifactId>allure-junit5</artifactId>
+			<artifactId>allure-jupiter</artifactId>
 			<version>${allure.version}</version>
 			<scope>test</scope>
 		</dependency>
