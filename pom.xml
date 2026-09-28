@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.4.5</version>
+		<version>4.1.1</version>
 		<relativePath/>
 	</parent>
 	<groupId>com.powerbind</groupId>
@@ -16,11 +16,11 @@
 
 	<properties>
 		<java.version>17</java.version>
-		<jjwt.version>0.12.6</jjwt.version>
-		<springdoc.version>2.8.9</springdoc.version>
-		<allure.version>2.24.0</allure.version>
-		<cucumber.version>7.20.1</cucumber.version>
-		<influxdb.version>6.12.0</influxdb.version>
+		<jjwt.version>0.13.0</jjwt.version>
+		<springdoc.version>3.1.1</springdoc.version>
+		<allure.version>2.35.5</allure.version>
+		<cucumber.version>8.0.3</cucumber.version>
+		<influxdb.version>8.0.0</influxdb.version>
 		<excludedGroups>requires-groq,performance,ui</excludedGroups>
 		<!-- SonarQube - server URL/project key live in run-sonar.ps1, not here -->
 		<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
@@ -31,21 +31,23 @@
 			<dependency>
 				<groupId>io.cucumber</groupId>
 				<artifactId>messages</artifactId>
-				<version>21.0.1</version>
+				<version>34.2.1</version>
 			</dependency>
 			<dependency>
 				<groupId>io.cucumber</groupId>
 				<artifactId>gherkin</artifactId>
-				<version>25.0.2</version>
+				<version>42.0.1</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
 	<dependencies>
-		<!-- Spring Boot Core -->
+		<!-- Spring Boot Core. Sejak Spring Boot 4 nama starter "web" sudah
+		     dideprecate dan digantikan "webmvc" (isinya sama: Tomcat +
+		     Spring MVC + starter Jackson). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -113,15 +115,19 @@
 		</dependency>
 
 		<!-- Resilience4j: CircuitBreaker + Retry untuk panggilan ke sistem eksternal
-		     (Groq API). AOP dibutuhkan agar anotasi @CircuitBreaker/@Retry aktif. -->
+		     (Groq API). AOP dibutuhkan agar anotasi @CircuitBreaker/@Retry aktif.
+		     Sejak Spring Boot 4 modul integrasinya berganti nama: dulu
+		     resilience4j-spring-boot3, sekarang resilience4j-spring-boot4. -->
 		<dependency>
 			<groupId>io.github.resilience4j</groupId>
-			<artifactId>resilience4j-spring-boot3</artifactId>
-			<version>2.2.0</version>
+			<artifactId>resilience4j-spring-boot4</artifactId>
+			<version>2.4.0</version>
 		</dependency>
+		<!-- Sejak Spring Boot 4 "spring-boot-starter-aop" berganti nama
+		     menjadi "spring-boot-starter-aspectj". -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-aop</artifactId>
+			<artifactId>spring-boot-starter-aspectj</artifactId>
 		</dependency>
 
 		<!-- Redis for rate limiting and caching -->
@@ -195,18 +201,18 @@
         <dependency>
             <groupId>com.github.loki4j</groupId>
             <artifactId>loki-logback-appender</artifactId>
-            <version>1.5.1</version>
+            <version>2.1.0</version>
         </dependency>
 
 		<dependency>
 			<groupId>org.apache.tika</groupId>
 			<artifactId>tika-core</artifactId>
-			<version>2.9.2</version>
+			<version>3.3.2</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.tika</groupId>
 			<artifactId>tika-parsers-standard-package</artifactId>
-			<version>2.9.2</version>
+			<version>3.3.2</version>
 		</dependency>
 
 		<!-- Testing -->
@@ -256,13 +262,10 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Allure reporting -->
-		<dependency>
-			<groupId>io.qameta.allure</groupId>
-			<artifactId>allure-cucumber7-jvm</artifactId>
-			<version>${allure.version}</version>
-			<scope>test</scope>
-		</dependency>
+		<!-- Allure reporting. allure-cucumber7-jvm sengaja TIDAK dipakai: adapter
+		     Cucumber dari Allure 2.x belum kompatibel dengan Cucumber 8 (lihat
+		     catatan di CucumberTestRunner), dan membiarkannya di classpath ikut
+		     menarik cucumber-core 7.x. -->
 		<dependency>
 			<groupId>io.qameta.allure</groupId>
 			<artifactId>allure-junit5</artifactId>
@@ -270,25 +273,27 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- REST Assured for API testing -->
+		<!-- REST Assured for API testing. 6.x wajib: Spring Boot 4 mengelola
+		     Groovy 5, sedangkan REST Assured 5.x masih di kompilasi untuk Groovy 4
+		     dan melempar NullPointerException di ClosureMetaClass saat request. -->
 		<dependency>
 			<groupId>io.rest-assured</groupId>
 			<artifactId>rest-assured</artifactId>
-			<version>5.4.0</version>
+			<version>6.0.1</version>
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Selenium -->
+		<!-- Selenium: versi tidak dipin, mengikuti yang dikelola Spring Boot
+		     (spring-boot-dependencies 4.1.1 -> Selenium 4.43.0). -->
 		<dependency>
 			<groupId>org.seleniumhq.selenium</groupId>
 			<artifactId>selenium-java</artifactId>
-			<version>4.21.0</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>io.github.bonigarcia</groupId>
 			<artifactId>webdrivermanager</artifactId>
-			<version>5.8.0</version>
+			<version>6.4.0</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -353,7 +358,11 @@
 			<plugin>
 				<groupId>org.flywaydb</groupId>
 				<artifactId>flyway-maven-plugin</artifactId>
-				<version>10.15.0</version>
+				<!-- Ikut versi Flyway yang dikelola Spring Boot (property
+				     ${flyway.version} dari spring-boot-dependencies 4.1.1 -> 12.4.0)
+				     supaya goal manual `mvn flyway:*` memakai Flyway yang sama
+				     dengan yang jalan saat startup aplikasi. -->
+				<version>${flyway.version}</version>
 				<configuration>
 					<url>jdbc:postgresql://localhost:5432/powerbind</url>
 					<!-- Credentials come from the environment (the same POSTGRES_* variables
@@ -372,7 +381,14 @@
 					<dependency>
 						<groupId>org.postgresql</groupId>
 						<artifactId>postgresql</artifactId>
-						<version>42.7.3</version>
+						<version>${postgresql.version}</version>
+					</dependency>
+					<!-- Flyway 10+ split per-database support into separate modules; without
+					     this the plugin aborts with "Unsupported Database: PostgreSQL". -->
+					<dependency>
+						<groupId>org.flywaydb</groupId>
+						<artifactId>flyway-database-postgresql</artifactId>
+						<version>${flyway.version}</version>
 					</dependency>
 				</dependencies>
 			</plugin>
@@ -381,7 +397,7 @@
 			<plugin>
 				<groupId>io.qameta.allure</groupId>
 				<artifactId>allure-maven</artifactId>
-				<version>2.12.0</version>
+				<version>2.18.0</version>
 				<configuration>
 					<resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
 					<reportDirectory>${project.build.directory}/allure-report</reportDirectory>
@@ -418,7 +434,7 @@
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.12</version>
+				<version>0.8.15</version>
 				<configuration>
 					<append>false</append>
 				</configuration>
@@ -455,13 +471,17 @@
 				<version>5.1.0.4751</version>
 			</plugin>
 
-			<!-- CycloneDX SBOM - run explicitly via .\run-sbom-backend.ps1
-			     (mvn cyclonedx:makeBom). No phase binding on purpose: regular
-			     builds and mvn verify stay untouched and fast. -->
+			<!-- CycloneDX SBOM. Perhatian: execution yang menulis
+			     target/classes/META-INF/sbom/application.cdx.json BUKAN dari sini,
+			     melainkan diwarisi dari spring-boot-starter-parent (goal
+			     makeAggregateBom, phase generate-resources) supaya SBOM ikut
+			     ter-embed di dalam jar. Blok di bawah hanya mengatur pemanggilan
+			     manual mvn cyclonedx:makeBom / .\run-sbom-backend.ps1, yang
+			     menulis sbom/bom.json. Versi plugin sengaja tidak dipin supaya
+			     selalu ikut versi yang dikelola Spring Boot. -->
 			<plugin>
 				<groupId>org.cyclonedx</groupId>
 				<artifactId>cyclonedx-maven-plugin</artifactId>
-				<version>2.9.1</version>
 				<configuration>
 					<projectType>application</projectType>
 					<schemaVersion>1.6</schemaVersion>
