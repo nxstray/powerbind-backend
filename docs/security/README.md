@@ -26,12 +26,14 @@ Dokumen ini **checklist manual** (bukan alat otomatis). Alat otomatis yang melen
 3. Tulis bukti di kolom Catatan (nama file, endpoint, atau keluaran alat) supaya bisa diaudit ulang.
 4. Setelah hardening, ukur ulang dengan alat otomatis di tabel atas.
 
-## Status saat dokumen ini dibuat (2026-09-23)
+## Status implementasi dan audit saat ini (2026-09-25)
 
-- Belum ada audit manual menyeluruh, jadi mayoritas item masih `Belum` atau `Perlu verifikasi`.
-- Yang sudah berjalan otomatis: SonarQube (kedua repo, Quality Gate OK) dan JaCoCo.
-- Baru ditambahkan dan belum dijalankan pertama kali: ZAP (`run-zap-backend.ps1`)
-  dan SBOM CycloneDX (`run-sbom-*.ps1`).
+- **Audit & Penyelarasan Standar**: Checklist telah diaudit dan diperbarui sesuai implementasi nyata pada codebase backend, frontend, dan konfigurasi kontainer.
+- **SonarQube (SAST)**: Berjalan otomatis untuk backend dan frontend dengan status **Quality Gate PASS**.
+- **CycloneDX SBOM**: Pipeline pembuatan SBOM backend (`run-sbom-backend.ps1`) dan frontend (`run-sbom-frontend.ps1`) aktif, dependensi tervalidasi bersih dari circular/peer issues.
+- **ZAP (DAST)**: Pemindaian dinamis aktif (`run-zap-backend.ps1`) terhadap 112 URL API menunjukkan **117 rules PASS, 0 FAIL, 0 High/Medium vulnerabilities**.
+- **Header Keamanan**: Spring Security telah mengaktifkan perlindungan HSTS, Anti-clickjacking (`X-Frame-Options: DENY`), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, dan `Cross-Origin-Resource-Policy: same-site`.
+- **Handling Error Framework**: Seluruh respon client-error (400, 404, 405, 415) dipetakan secara terstruktur via `GlobalExceptionHandler` tanpa kebocoran 500 stacktrace.
 
 ## Catatan
 

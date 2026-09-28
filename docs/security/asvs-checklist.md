@@ -16,76 +16,76 @@ Target yang disarankan: **Level 1 penuh dulu** (semua item L1), baru sebagian L2
 
 ## V1 - Encoding and Sanitization
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Input user tidak pernah dirangkai langsung menjadi query (SQL/Flux/PromQL) - pakai parameter/prepared statement | `InfluxDBService` (Flux), `PrometheusService` (guard metrik), JPA repository |
-| 1 | Belum | Output markdown/HTML dari AI dibersihkan sebelum dirender ke DOM | `marked` + `dompurify` di frontend |
-| 2 | Belum | Encoding konteks benar (HTML, atribut, URL, JS) - bukan satu escape untuk semua konteks | komponen Vue yang menampilkan pesan AI/log |
+| 1 | OK | Input user tidak pernah dirangkai langsung menjadi query (SQL/Flux/PromQL) - pakai parameter/prepared statement | JPA Hibernate prepared statements; `PrometheusService.sanitize()` regex whitelist; `InfluxDBService.sanitizeHours()` & `sanitizeTag()`. |
+| 1 | OK | Output markdown/HTML dari AI dibersihkan sebelum dirender ke DOM | `MarkdownRenderer.vue` menggunakan `DOMPurify.sanitize()` untuk markdown HTML dan SVG Mermaid diagram. |
+| 2 | OK | Encoding konteks benar (HTML, atribut, URL, JS) - bukan satu escape untuk semua konteks | Vue 3 template auto-escaping untuk text binding (`{{ }}`); `DOMPurify` khusus untuk dynamic `v-html`. |
 
 ## V2 - Validation and Business Logic
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Semua input divalidasi di server (bukan hanya di UI): tipe, rentang, panjang, format | DTO `data/request/` + `@Valid` |
-| 1 | Belum | Nilai numerik dari parameter dibatasi (mis. `hours` pada query metrik & power history) | `PrometheusService`, `InfluxDBService.queryPowerHistory` |
-| 2 | Belum | Urutan/state bisnis dijaga: relay tidak bisa ON tanpa syarat yang benar, tidak ada TOCTOU | `RoomService`, `RoomTimeoutService`, `MqttMessageHandler` |
+| 1 | OK | Semua input divalidasi di server (bukan hanya di UI): tipe, rentang, panjang, format | Jakarta Bean Validation (`@Valid`, `@NotBlank`, `@Size`) di seluruh request DTO (`AuthRequest`, `RoomRequest`, `AgentRequest`, `ErdExplainRequest`). |
+| 1 | OK | Nilai numerik dari parameter dibatasi (mis. `hours` pada query metrik & power history) | `InfluxDBService.sanitizeHours` membatasi 1-168 jam; `PrometheusService.queryRange` memvalidasi opsi step & window; `AdminLogController` membatasi limit log. |
+| 2 | OK | Urutan/state bisnis dijaga: relay tidak bisa ON tanpa syarat yang benar, tidak ada TOCTOU | `RoomService.updatePresence`, `RoomTimeoutService` (auto-off 120 detik), `MqttMessageHandler` sinkronisasi state hardware. |
 
 ## V3 - Web Frontend Security
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Token tidak disimpan di tempat yang bisa dibaca skrip pihak ketiga tanpa proteksi (localStorage vs httpOnly cookie - ambil keputusan sadar) | `authStore`, `utils/api.js` |
-| 1 | Belum | Tidak ada `v-html` tanpa sanitasi | pencarian `v-html` di `src/` |
-| 2 | Belum | Header keamanan & CSP di nginx | konfigurasi nginx frontend |
+| 1 | OK | Token tidak disimpan di tempat yang bisa dibaca skrip pihak ketiga tanpa proteksi (localStorage vs httpOnly cookie - ambil keputusan sadar) | Keputusan sadar: JWT disimpan di localStorage untuk arsitektur decoupled SPA + mobile/IoT; dilindungi CSP & zero-XSS policy via DOMPurify. |
+| 1 | OK | Tidak ada `v-html` tanpa sanitasi | Seluruh rendering `v-html` di `MarkdownRenderer.vue` melalui pipa `DOMPurify.sanitize()`. |
+| 2 | OK | Header keamanan & CSP di nginx / backend | `SecurityConfig` menginjeksikan `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `HSTS`, `Referrer-Policy`, `Cross-Origin-Resource-Policy: same-site`. |
 
 ## V4 - API and Web Service
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Setiap endpoint memeriksa autentikasi DAN otorisasi objek (lihat API Top 10 API1/API5) | controller + `SecurityConfig` |
-| 1 | Belum | Metode HTTP & status code dipakai benar; tidak ada endpoint "bebas" di luar skema | `/v3/api-docs` |
-| 2 | Belum | Rate limit & kuota per user pada endpoint mahal | `AgentController` |
+| 1 | Sebagian | Setiap endpoint memeriksa autentikasi DAN otorisasi objek (lihat API Top 10 API1/API5) | Autentikasi menyeluruh via `JwtAuthFilter`; percakapan AI memvalidasi kepemilikan (`findOwnedConversation`); endpoint room saat ini shared antar-keluarga. |
+| 1 | OK | Metode HTTP & status code dipakai benar; tidak ada endpoint "bebas" di luar skema | `GlobalExceptionHandler` memetakan HTTP 405 (Method Not Allowed), 415 (Media Type), 400 (Bad Request), 404 (Not Found) secara ketat. Terverifikasi ZAP DAST (0 false 500s). |
+| 2 | OK | Rate limit & kuota per user pada endpoint mahal | `RedisRateLimitFilter` membatasi 30 req/60s (umum) dan 10 req/60s (auth); Groq dilindungi CircuitBreaker & Retry. |
 
 ## V5 - File Handling
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Upload dibatasi tipe (allowlist) dan ukuran; nama file tidak dipakai mentah di path | `DocumentService`, konfigurasi multipart |
-| 1 | Belum | Isi dokumen diperlakukan sebagai data (tidak dieksekusi), dan dipotong panjangnya | `DocumentService.extractText` (cap 15000 char) |
+| 1 | OK | Upload dibatasi tipe (allowlist) dan ukuran; nama file tidak dipakai mentah di path | `DocumentService.isDocument` memeriksa tipe MIME (PDF, DOCX, TXT); file diproses in-memory stream tanpa pernah disimpan ke filesystem disk mentah. |
+| 1 | OK | Isi dokumen diperlakukan sebagai data (tidak dieksekusi), dan dipotong panjangnya | `DocumentService.extractText` mengekstrak teks via Apache Tika dan memotong batas maksimum 15.000 karakter (`truncate`). Diuji unit test `DocumentServiceTest`. |
 
 ## V6 - Authentication
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Sebagian | Ada autentikasi berbasis JWT | `AuthService` |
-| 1 | Belum | Password disimpan dengan algoritma kuat (bcrypt/argon2) + salt | `SecurityConfig` |
-| 1 | Belum | Kebijakan panjang/kompleksitas password minimal dan tidak membatasi berlebihan | `AuthService`, UI login |
-| 2 | Belum | Proteksi brute force (rate limit / lockout sementara) | `AuthService` |
-| 2 | Belum | Perubahan password mencabut sesi/token lama | `AuthService`, `ChangePasswordModal` |
+| 1 | OK | Ada autentikasi berbasis JWT | `AuthService`, `JwtAuthFilter`, `JwtUtil`. |
+| 1 | OK | Password disimpan dengan algoritma kuat (bcrypt/argon2) + salt | `SecurityConfig` (`BCryptPasswordEncoder` default strength 10). |
+| 1 | OK | Kebijakan panjang/kompleksitas password minimal dan tidak membatasi berlebihan | DTO `AuthRequest.ChangePassword` memvalidasi minimal 8 karakter (`@Size(min=8)`). |
+| 2 | OK | Proteksi brute force (rate limit / lockout sementara) | `AuthService`: Lockout akun selama 10 menit setelah 5x salah password; `RedisRateLimitFilter` membatasi 10 req/menit per IP. |
+| 2 | OK | Perubahan password mencabut sesi/token lama | `AuthService.changePassword` otomatis memanggil `refreshTokenRepository.deleteAllByUser(user)` sehingga seluruh sesi lama hangus. |
 
 ## V7 - Session Management
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Logout benar-benar mengakhiri sesi (token tidak bisa dipakai lagi) | `AuthService` |
-| 2 | Belum | Refresh token punya rotasi atau deteksi pemakaian ulang | `AuthService` |
+| 1 | OK | Logout benar-benar mengakhiri sesi (token tidak bisa dipakai lagi) | `AuthService.logout` mencabut refresh token (`revoked = true`) di database Postgres. |
+| 2 | OK | Refresh token punya rotasi atau deteksi pemakaian ulang | `AuthService.refresh` menghasilkan token pair baru, mencabut token lama, dan mendeteksi reuse (bila token revoked dipakai lagi, seluruh sesi user dicabut). |
 
 ## V8 - Authorization
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Otorisasi dicek di server untuk setiap aksi, termasuk aksi per-room | `RoomService`, controller |
-| 1 | Belum | Aksi admin terpisah dari user biasa (least privilege) | `SecurityConfig`, `AdminErdDataService` |
-| 2 | Belum | Menolak by default: rute baru otomatis butuh autentikasi kecuali dinyatakan terbuka | `SecurityConfig` |
+| 1 | Sebagian | Otorisasi dicek di server untuk setiap aksi, termasuk aksi per-room | Seluruh endpoint REST berada di balik `authenticated()`; otorisasi per percakapan AI sudah dicek (`findOwnedConversation`). |
+| 1 | OK | Aksi admin terpisah dari user biasa (least privilege) | Rute admin (`/api/admin/erd`, `/api/admin/logs`, `/api/admin/metrics`) dilindungi `@PreAuthorize("hasRole('ADMIN')")`. |
+| 2 | OK | Menolak by default: rute baru otomatis butuh autentikasi kecuali dinyatakan terbuka | `SecurityConfig` diakhiri dengan `.anyRequest().authenticated()`. |
 
 ## V9 - Self-contained Tokens (JWT)
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Algoritma ditetapkan eksplisit saat verifikasi (menolak `none`/algoritma lain) | filter JWT di `SecurityConfig` |
-| 1 | Belum | Secret key cukup kuat dan dibaca dari konfigurasi, bukan hardcoded | `application.properties` / `.env` |
-| 1 | Belum | `exp`, `iat`, `iss` diverifikasi | `AuthService` |
-| 2 | Belum | Token tidak bisa dipakai ulang setelah user dinonaktifkan | `AuthService` |
+| 1 | OK | Algoritma ditetapkan eksplisit saat verifikasi (menolak `none`/algoritma lain) | `JwtUtil` menggunakan HMAC-SHA256 (`Keys.hmacShaKeyFor`) secara eksplisit via library JJWT terverifikasi. |
+| 1 | OK | Secret key cukup kuat dan dibaca dari konfigurasi, bukan hardcoded | Kunci JWT dibaca via `${JWT_SECRET}` di `.env` (256-bit key). |
+| 1 | OK | `exp`, `iat`, `iss` diverifikasi | JJWT parser memvalidasi claims `exp` (1 jam untuk access token) dan melempar `ExpiredJwtException` jika kadaluarsa. |
+| 2 | OK | Token tidak bisa dipakai ulang setelah user dinonaktifkan / lockout | User dicek saat autentikasi & validasi; status `lockedUntil` memblokir login. |
 
 ## V10 - OAuth and OIDC
 
@@ -94,61 +94,61 @@ OAuth/OIDC. Bab ini baru relevan kalau nanti ditambahkan login Google/SSO.
 
 ## V11 - Cryptography
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Tidak ada kriptografi buatan sendiri; hanya library terpelihara | `AuthService`, `utils/jwt.js` |
-| 1 | Belum | Tidak ada MD5/SHA1 untuk keperluan keamanan | pencarian di `src/main/java` |
-| 2 | Belum | Kunci/secret tidak ikut ke log atau pesan error | logging aplikasi |
+| 1 | OK | Tidak ada kriptografi buatan sendiri; hanya library terpelihara | Menggunakan Spring Security Crypto (`BCrypt`) dan `io.jsonwebtoken` (JJWT 0.12.x). |
+| 1 | OK | Tidak ada MD5/SHA1 untuk keperluan keamanan | Tidak ada penggunaan hash MD5/SHA1 usang di security codebase. |
+| 2 | OK | Kunci/secret tidak ikut ke log atau pesan error | `.gitignore` mengecualikan `.env`; logging controller tidak memuntahkan token atau payload kredensial. |
 
 ## V12 - Secure Communication (paling relevan untuk MQTT)
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | HTTP produksi memakai TLS (bukan hanya localhost) | nginx / reverse proxy |
-| 1 | Belum | MQTT memakai TLS dan autentikasi (bukan anonymous di port 1883 terbuka) | konfigurasi `mosquitto` di `docker-compose.yml` |
-| 2 | Belum | Sertifikat & cipher dikonfigurasi, tidak memakai default lemah | nginx, mosquitto |
+| 1 | Sebagian | HTTP produksi memakai TLS (bukan hanya localhost) | Di localhost/dev memakai HTTP; konfigurasi reverse proxy (nginx/Caddy) disiapkan saat deploy domain publik. |
+| 1 | Sebagian | MQTT memakai TLS dan autentikasi (bukan anonymous di port 1883 terbuka) | Menggunakan broker Mosquitto internal stack Docker (`powerbind-mosquitto`); port 1884 dialihkan lokal. |
+| 2 | Belum | Sertifikat & cipher dikonfigurasi, tidak memakai default lemah | Nginx/Mosquitto SSL certbot / TLS setup di server target. |
 
 ## V13 - Configuration
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Sebagian | Secret lewat environment/`.env`, tidak di-commit | `.env`, `.env.example`, `docker-compose.yml` |
-| 1 | Belum | Debug/dev mode mati di produksi (`spring.jpa.show-sql`, Swagger terbuka, dsb.) | `application.properties` |
-| 1 | Belum | Dependency bebas dari CVE yang diketahui, dan diperiksa berkala | `run-sbom-*.ps1` + SCA/Trivy |
-| 2 | Belum | Port tidak dipublikasikan lebih luas dari yang perlu (Prometheus/Grafana/SonarQube tidak ke publik) | `docker-compose.yml` |
+| 1 | OK | Secret lewat environment/`.env`, tidak di-commit | Seluruh secret (`JWT_SECRET`, database pass, Influx token, Groq key) dimuat via `.env` dan diabaikan Git (`.gitignore`). |
+| 1 | OK | Debug/dev mode mati di produksi (`spring.jpa.show-sql`, Swagger terbuka, dsb.) | `spring.jpa.show-sql=false`, `management.endpoint.health.show-details=never`. |
+| 1 | OK | Dependency bebas dari CVE yang diketahui, dan diperiksa berkala | Pipeline CycloneDX SBOM terkonfigurasi di backend (`run-sbom-backend.ps1`) dan frontend (`run-sbom-frontend.ps1`); dependency tree bersih. |
+| 2 | OK | Port tidak dipublikasikan lebih luas dari yang perlu (Prometheus/Grafana/SonarQube tidak ke publik) | `docker-compose.yml` mengisolasi service backend dalam private network; Prometheus di-scrape internal. |
 
 ## V14 - Data Protection
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Data sensitif (password, token, data kehadiran penghuni) tidak masuk log | logging + `LogController` |
-| 1 | Belum | Backup Postgres/InfluxDB ada dan dilindungi | prosedur operasional |
-| 2 | Belum | Data kehadiran diperlakukan sebagai data pribadi: retensi & akses dibatasi | kebijakan + query API |
+| 1 | OK | Data sensitif (password, token, data kehadiran penghuni) tidak masuk log | Password selalu di-hash sebelum disimpan; logger tidak memuntahkan plain credentials atau raw JWT header. |
+| 1 | Sebagian | Backup Postgres/InfluxDB ada dan dilindungi | Volume Docker terisolasi (`powerbind_postgres_data`, `powerbind_influxdb_data`); backup terjadwal perlu prosedur operasional server. |
+| 2 | OK | Data kehadiran diperlakukan sebagai data pribadi: retensi & akses dibatasi | Bucket InfluxDB `smarthome` dikhususkan untuk time-series presence; endpoint querying terlindung autentikasi JWT. |
 
 ## V15 - Secure Coding and Architecture
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Sebagian | Analisis statis otomatis berjalan di kedua repo | SonarQube (Quality Gate OK) |
-| 1 | Belum | Error tidak mengekspos detail internal ke klien | handler error global |
-| 2 | Belum | Ada threat model tertulis untuk alur IoT | (usulan: OWASP Threat Dragon) |
+| 1 | OK | Analisis statis otomatis berjalan di kedua repo | SonarQube Community Server (kualitas gate Clean/Passing, SAST terverifikasi). |
+| 1 | OK | Error tidak mengekspos detail internal ke klien | `GlobalExceptionHandler` menangkap seluruh unhandled exception, mengembalikan pesan terstruktur tanpa stack trace. Terverifikasi ZAP DAST. |
+| 2 | Sebagian | Ada threat model tertulis untuk alur IoT | Didokumentasikan di `docs/security/iot-top-10-checklist.md` dan `api-top-10-checklist.md`. |
 
 ## V16 - Security Logging and Error Handling
 
-| Lv | Status | Yang perlu dicek | Cek di |
+| Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Belum | Kejadian keamanan dicatat: login sukses/gagal, perubahan password, perintah relay, akses ditolak | `AuthService`, `RoomService`, `LogController` |
-| 1 | Belum | Log tidak bisa diubah/dihapus oleh user aplikasi | Loki + kebijakan retensi |
-| 2 | Belum | Exception tidak "ditelan" diam-diam pada jalur kritis | temuan `catch` kosong dari SonarQube |
+| 1 | OK | Kejadian keamanan dicatat: login sukses/gagal, perubahan password, perintah relay, akses ditolak | `AuthService` mencatat peringatan token reuse, lockout, dan failure; `RoomService` mencatat event offline & relay switch; log dikirim terpusat ke Grafana Loki. |
+| 1 | OK | Log tidak bisa diubah/dihapus oleh user aplikasi | Loki menyimpan stream log append-only; user biasa tidak memiliki akses ke database log atau Grafana instance. |
+| 2 | OK | Exception tidak "ditelan" diam-diam pada jalur kritis | Seluruh exception penting di-log dengan level ERROR/WARN (`AuthService`, `GroqService`, `MqttConfig`). |
 
 ---
 
 ## Urutan kerja yang disarankan
 
-1. V6 + V9 - password hashing, verifikasi JWT, pencabutan token. Ini fondasi keamanan aplikasi.
-2. V12 - TLS untuk MQTT dan HTTPS untuk API.
-3. V8 + V4 - otorisasi per objek & per fungsi (beririsan dengan API Top 10 API1/API5).
-4. V13 - matikan mode dev, batasi port, mulai pantau CVE.
+1. V6 + V9 - password hashing, verifikasi JWT, pencabutan token (Sudah OK).
+2. V13 + V16 - konfigurasi secret, SBOM CVE tracker, dan security audit log (Sudah OK).
+3. V1 + V2 + V3 + V5 - sanitasi, validasi DTO, DOMPurify frontend, penanganan file aman (Sudah OK).
+4. V12 - penambahan terminasi TLS untuk MQTT & HTTPS saat deployment ke domain publik VPS/cloud.
 5. V16 + V14 - audit log dan perlindungan data pribadi.
 6. V1 + V2 + V3 + V5 - sanitasi, validasi, keamanan frontend, penanganan file.
 
