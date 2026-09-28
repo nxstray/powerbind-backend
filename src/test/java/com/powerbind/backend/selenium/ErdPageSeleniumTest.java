@@ -200,24 +200,24 @@ class ErdPageSeleniumTest extends SeleniumTestBase {
     @Test
     @DisplayName("TC-SEL-ERD-04 Grid toggle switches the canvas dot-grid off and back on")
     void erd_gridToggle_shouldSwitchBackgroundGrid() {
-        assertTrue(toolbarButtons().get(IDX_GRID).getAttribute("class").contains("bg-sky-500"),
+        assertTrue(toolbarButtons().get(IDX_GRID).getDomAttribute("class").contains("bg-sky-500"),
                 "Grid button should start highlighted (grid is on by default)");
-        assertTrue(canvasViewport().getAttribute("style").contains("radial-gradient"),
+        assertTrue(canvasViewport().getDomAttribute("style").contains("radial-gradient"),
                 "Canvas background should use the dot-grid radial-gradient");
 
         toolbarButtons().get(IDX_GRID).click();
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> !d.findElements(By.cssSelector(".bottom-12 button"))
-                        .get(IDX_GRID).getAttribute("class").contains("bg-sky-500"));
-        assertFalse(canvasViewport().getAttribute("style").contains("radial-gradient"),
+                        .get(IDX_GRID).getDomAttribute("class").contains("bg-sky-500"));
+        assertFalse(canvasViewport().getDomAttribute("style").contains("radial-gradient"),
                 "Toggling the grid off should remove the dot-grid background");
         attachScreenshot("erd-08-grid-toggled-off");
 
         toolbarButtons().get(IDX_GRID).click();
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> d.findElements(By.cssSelector(".bottom-12 button"))
-                        .get(IDX_GRID).getAttribute("class").contains("bg-sky-500"));
-        assertTrue(canvasViewport().getAttribute("style").contains("radial-gradient"),
+                        .get(IDX_GRID).getDomAttribute("class").contains("bg-sky-500"));
+        assertTrue(canvasViewport().getDomAttribute("style").contains("radial-gradient"),
                 "Toggling the grid back on should restore the dot-grid background");
         attachScreenshot("erd-09-grid-toggled-back-on");
     }

@@ -129,7 +129,7 @@ class MetricsPageSeleniumTest extends SeleniumTestBase {
 
         WebElement panel = new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(ExpectedConditions.visibilityOfElementLocated(ASK_PANEL));
-        assertTrue(panel.getAttribute("style").contains("width: 320px"),
+        assertTrue(panel.getDomAttribute("style").contains("width: 320px"),
                 "Panel should expand to its fixed 320px width");
         assertTrue(driver.findElements(ASK_TRIGGER).isEmpty(),
                 "Header trigger should disappear while the panel is open");
@@ -142,8 +142,8 @@ class MetricsPageSeleniumTest extends SeleniumTestBase {
         // (nav sidebar first, Ask Gemono panel second) and only the panel's inline
         // width animates between 320px and 0px.
         new WebDriverWait(driver, Duration.ofSeconds(5))
-                .until(d -> askPanel().getAttribute("style").contains("width: 0px"));
-        assertFalse(askPanel().getAttribute("style").contains("320px"),
+                .until(d -> askPanel().getDomAttribute("style").contains("width: 0px"));
+        assertFalse(askPanel().getDomAttribute("style").contains("320px"),
                 "Panel should collapse back to zero width");
         attachScreenshot("metrics-06-panel-closed");
     }

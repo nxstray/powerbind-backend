@@ -91,19 +91,19 @@ class LogPageSeleniumTest extends SeleniumTestBase {
         // Active label color is theme-dependent (LogPage.vue chipClass): text-red-400 on
         // the dark weather theme, text-red-600 on the light one. Assert the red prefix so
         // this passes in either theme — inactive is always text-zinc-500/text-gray-400.
-        assertTrue(errorChip.getAttribute("class").contains("text-red-"),
+        assertTrue(errorChip.getDomAttribute("class").contains("text-red-"),
                 "ERROR chip should start active (red label tint)");
 
         errorChip.click();
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> !d.findElement(By.xpath("//button[normalize-space()='ERROR']"))
-                        .getAttribute("class").contains("text-red-"));
+                        .getDomAttribute("class").contains("text-red-"));
         attachScreenshot("log-02-error-chip-toggled-off");
 
         driver.findElement(By.xpath("//button[normalize-space()='ERROR']")).click();
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> d.findElement(By.xpath("//button[normalize-space()='ERROR']"))
-                        .getAttribute("class").contains("text-red-"));
+                        .getDomAttribute("class").contains("text-red-"));
         attachScreenshot("log-03-error-chip-toggled-back-on");
     }
 
@@ -154,13 +154,13 @@ class LogPageSeleniumTest extends SeleniumTestBase {
         WebElement row = lastBackendRow();
         Assumptions.assumeTrue(row != null,
                 "Skipped: no backend log rows in the current window (Loki down or a very quiet hour)");
-        assertFalse(row.getAttribute("class").contains("bg-zinc-800/70"), "Row should start collapsed");
+        assertFalse(row.getDomAttribute("class").contains("bg-zinc-800/70"), "Row should start collapsed");
 
         row.click();
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> {
                     WebElement r = lastBackendRow();
-                    return r != null && r.getAttribute("class").contains("bg-zinc-800/70");
+                    return r != null && r.getDomAttribute("class").contains("bg-zinc-800/70");
                 });
         attachScreenshot("log-08-row-expanded");
 
@@ -168,7 +168,7 @@ class LogPageSeleniumTest extends SeleniumTestBase {
         new WebDriverWait(driver, Duration.ofSeconds(5))
                 .until(d -> {
                     WebElement r = lastBackendRow();
-                    return r != null && !r.getAttribute("class").contains("bg-zinc-800/70");
+                    return r != null && !r.getDomAttribute("class").contains("bg-zinc-800/70");
                 });
         attachScreenshot("log-09-row-collapsed");
     }
