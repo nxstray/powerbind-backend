@@ -167,10 +167,15 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- Flyway for database migration -->
+		<!-- Flyway untuk database migration. Wajib memakai starter, bukan
+		     flyway-core langsung: sejak Spring Boot 4 auto-configuration
+		     dimodularisasi, jadi tanpa modul spring-boot-flyway (yang dibawa
+		     starter ini) properti spring.flyway.* diabaikan dan migrasi TIDAK
+		     jalan saat startup. Modul khusus database tetap perlu ditambahkan
+		     manual karena Flyway 10+ memisahkannya. -->
 		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-core</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
