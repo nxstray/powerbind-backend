@@ -1,6 +1,8 @@
 package com.powerbind.backend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.MissingNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +40,7 @@ public class PrometheusService {
     private record CacheEntry(Object data, long expiresAt) {}
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     public PrometheusService(@Value("${prometheus.base-url:http://localhost:9090}") String baseUrl) {
@@ -118,17 +121,33 @@ public class PrometheusService {
     }
 
     private JsonNode fetch(String path, java.util.function.Function<UriBuilder, java.net.URI> customizer) {
-        JsonNode body = webClient.get()
+        String response = webClient.get()
                 .uri(uriBuilder -> customizer.apply(uriBuilder.path(path)))
                 .retrieve()
-                .bodyToMono(JsonNode.class)
+                .bodyToMono(String.class)
                 .timeout(HTTP_TIMEOUT)
                 .onErrorResume(e -> {
                     log.error("[Prometheus] Query {} failed: {}", path, e.getMessage());
                     return Mono.empty();
                 })
                 .block();
-        return body == null ? MissingNode.getInstance() : body;
+        return parse(response);
+    }
+
+    // Spring Boot 4 decodes WebClient bodies with Jackson 3 (tools.jackson), but this
+    // project still compiles against Jackson 2 (jjwt + jackson-datatype-jsr310 bring
+    // jackson-databind 2.x). Handing a Jackson 2 JsonNode to the Jackson 3 decoder
+    // throws "Type definition error: [simple type, class ...JsonNode]", so every query
+    // silently fell back to MissingNode. Decode the raw body to a String and parse it
+    // with a Jackson 2 ObjectMapper — the same pattern GroqService already uses.
+    private JsonNode parse(String response) {
+        if (response == null || response.isBlank()) return MissingNode.getInstance();
+        try {
+            return objectMapper.readTree(response);
+        } catch (JsonProcessingException e) {
+            log.error("[Prometheus] Response parse failed: {}", e.getMessage());
+            return MissingNode.getInstance();
+        }
     }
 
     private List<Map<String, Object>> parseSeries(JsonNode body, String groupBy, String metric) {

@@ -49,8 +49,11 @@ class PrometheusServiceTest {
         ReflectionTestUtils.setField(service, "webClient", webClient);
     }
 
+    // The service now decodes the raw response body to a String and parses it with a
+    // Jackson 2 ObjectMapper (Boot 4's WebClient codec is Jackson 3), so the stub hands
+    // back JSON text rather than a JsonNode.
     private void stubResponse(JsonNode body) {
-        when(responseSpec.bodyToMono(JsonNode.class)).thenReturn(Mono.just(body));
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(body.toString()));
     }
 
     private static JsonNode json(String raw) {
@@ -136,7 +139,7 @@ class PrometheusServiceTest {
     @Test
     @DisplayName("TC-UNIT-PROM-06 a failed fetch degrades to an empty list (no exception)")
     void getMetricNames_shouldReturnEmpty_whenFetchFails() {
-        when(responseSpec.bodyToMono(JsonNode.class)).thenReturn(Mono.empty());
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.empty());
 
         assertTrue(service.getMetricNames().isEmpty());
     }
