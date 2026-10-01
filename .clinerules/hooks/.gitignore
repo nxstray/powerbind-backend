@@ -1,0 +1,6 @@
+# Runtime output of the hooks in this folder -- recreated on demand, never
+# reviewed, so it stays out of git. The rule lives here rather than in
+# logs/.gitignore because the repository root .gitignore already ignores any
+# directory named `logs`, and a file inside an ignored directory can never be
+# re-included by a nested rule.
+logs/
