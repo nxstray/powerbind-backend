@@ -3,11 +3,11 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
-    <!-- Loki URL diambil dari application.properties (loki.url) — berupa BASE URL
-         tanpa path, konsisten dengan AdminLogController yang menambahkan
-         /loki/api/v1/query_range sendiri; appender ini menambahkan /loki/api/v1/push.
-         Default localhost supaya tetap jalan di dev tanpa Docker; di docker-compose
-         override lewat env LOKI_URL=http://loki:3100 -->
+    <!-- Loki URL comes from application.properties (loki.url) - a BASE URL without
+         a path, consistent with AdminLogController which appends /loki/api/v1/query_range
+         itself; this appender appends /loki/api/v1/push.
+         Defaults to localhost so it still works in dev without Docker; docker-compose
+         overrides it through the LOKI_URL=http://loki:3100 environment variable. -->
     <springProperty scope="context" name="LOKI_URL" source="loki.url"
                      defaultValue="http://localhost:3100"/>
 
@@ -15,15 +15,33 @@
         <http>
             <url>${LOKI_URL}/loki/api/v1/push</url>
         </http>
-        <format>
-            <label>
-                <pattern>app=powerbind-backend,host=${HOSTNAME},level=%level</pattern>
-            </label>
-            <message>
-                <pattern>${CONSOLE_LOG_PATTERN}</pattern>
-            </message>
-            <sortByTime>true</sortByTime>
-        </format>
+        <!-- loki-logback-appender 2.x layout: <http> + <labels> + <message>.
+             Two changes from 1.x, both mandatory:
+               1. the <format><label><message> wrapper was removed - <labels> and
+                  <message> are now direct children of the appender;
+               2. label pairs are separated by NEWLINES (KV_PAIR_SEPARATOR is the
+                  regex "\n|\r\n"), not by commas. Comma-separated labels make
+                  LabelsPatternParser throw, the appender fails to start, and every
+                  log silently stops reaching Loki - which leaves GET /api/admin/logs
+                  permanently empty. -->
+        <labels>app=powerbind-backend
+host=${HOSTNAME}
+level=%level</labels>
+        <!-- 2.x defaults batchTimeout to 60s, which makes the admin Log page look
+             dead (it polls every 3s). Keep the queue small and the flush quick so
+             logs land in Loki while the admin is still watching. -->
+        <batch>
+            <timeoutMs>3000</timeoutMs>
+        </batch>
+        <!-- 2.x sends structured metadata by default, which Loki 2.9 answers with
+             HTTP 400 ("includes structured metadata, but this feature is
+             disallowed") - structured metadata only became generally available in
+             Loki 3.x. "off" is loki4j's documented sentinel for disabling it; the
+             level label above already carries the log level. -->
+        <structuredMetadata>off</structuredMetadata>
+        <message>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </message>
     </appender>
 
     <root level="INFO">
