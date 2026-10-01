@@ -1,6 +1,8 @@
 package com.powerbind.backend.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.powerbind.backend.data.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +28,7 @@ import java.util.*;
 public class AdminLogController {
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AdminLogController(@Value("${loki.url:http://localhost:3100}") String lokiUrl) {
         this.webClient = WebClient.builder().baseUrl(lokiUrl).build();
@@ -42,7 +45,14 @@ public class AdminLogController {
 
         String logQl = buildLogQl(source, level, search);
 
-        JsonNode body = webClient.get()
+        // Loki answers with JSON, but Spring Boot 4's WebClient decodes with Jackson 3
+        // (tools.jackson) while this project still compiles against Jackson 2 (jjwt and
+        // jackson-datatype-jsr310 pull jackson-databind 2.x). Asking the Jackson 3 decoder
+        // for a Jackson 2 JsonNode throws "Type definition error: [simple type, class
+        // ...JsonNode]", that error is swallowed by onErrorResume below, and /api/admin/logs
+        // silently returned 0 entries. Decode the raw body to a String and parse it with a
+        // Jackson 2 ObjectMapper instead — the same pattern GroqService already uses.
+        String response = webClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/loki/api/v1/query_range")
                         // logQl contains literal { } (the LogQL stream selector) — passed
@@ -56,14 +66,14 @@ public class AdminLogController {
                         .queryParam("direction", "backward")
                         .build(logQl))
                 .retrieve()
-                .bodyToMono(JsonNode.class)
+                .bodyToMono(String.class)
                 .onErrorResume(e -> {
                     log.error("[AdminLogs] Loki query failed: {}", e.getMessage());
                     return Mono.empty();
                 })
                 .block();
 
-        return ResponseEntity.ok(ApiResponse.ok(toFlatEntries(body)));
+        return ResponseEntity.ok(ApiResponse.ok(toFlatEntries(parse(response))));
     }
 
     // Level is an actual Loki label (see logback-spring.xml), but source isn't —
@@ -89,6 +99,16 @@ public class AdminLogController {
         }
 
         return selector.toString();
+    }
+
+    private JsonNode parse(String response) {
+        if (response == null || response.isBlank()) return null;
+        try {
+            return objectMapper.readTree(response);
+        } catch (JsonProcessingException e) {
+            log.error("[AdminLogs] Loki response parse failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     private List<Map<String, Object>> toFlatEntries(JsonNode body) {
