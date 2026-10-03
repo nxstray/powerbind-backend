@@ -1,7 +1,7 @@
 # Powerbind — Backend
 
 IoT Smart Home Energy Management backend with an integrated **multimodal AI agent**.
-Built with **Java 17 + Spring Boot 3.4.5 (Maven)**.
+Built with **Java 17 + Spring Boot 4.1.1 (Maven)**.
 
 ---
 
@@ -38,7 +38,7 @@ flowchart LR
 
 ## Tech stack
 
-- **Core:** Java 17, Spring Boot 3.4.5, Spring Security, Spring Data JPA, WebSocket (STOMP), WebFlux (SSE)
+- **Core:** Java 17, Spring Boot 4.1.1, Spring Security, Spring Data JPA, WebSocket (STOMP), WebFlux (SSE)
 - **Storage:** PostgreSQL (+ Flyway migrations), InfluxDB (time-series), Redis (rate limiting)
 - **IoT:** Eclipse Paho MQTT (Mosquitto broker)
 - **AI:** Groq API (OpenAI-compatible: chat, vision, Whisper, document parsing)
