@@ -19,6 +19,40 @@
 $gitCommitPattern = '(?i)\bgit\s+(?:-[^\s]+\s+)*commit\b([^\r\n]*)'
 $gitAddPattern = '(?i)\bgit\s+(?:-[^\s]+\s+)*add\b([^\r\n]*)'
 
+# Shell tool names that actually reach this hook. Cline builds differ: a single
+# `execute_command` tool, or the batched `run_commands` tool whose `commands`
+# parameter is a JSON array (often pre-stringified). Every name must be listed
+# here, otherwise the guard silently never runs for that build.
+$shellToolNames = @('execute_command', 'run_commands')
+
+function Get-CommandText {
+    param($Parameters)
+    if ($null -eq $Parameters) { return '' }
+
+    # Single-command tools: `command` / `cmd`.
+    $single = Get-FieldAny $Parameters @('command', 'cmd') $null
+    if ($null -ne $single -and "$single".Trim() -ne '') { return "$single" }
+
+    # Batched tools: `commands` -- a string array, or a JSON string holding one.
+    $multi = Get-Field $Parameters 'commands' $null
+    if ($null -eq $multi) { return '' }
+    if ($multi -is [string]) {
+        $parsed = $null
+        try { $parsed = $multi | ConvertFrom-Json } catch { return $multi }
+        if ($null -eq $parsed) { return $multi }
+        $multi = $parsed
+    }
+
+    # Join with newlines so the [^\r\n]* tail of a git pattern stops at the end
+    # of its own command instead of running across the whole batch.
+    $parts = @()
+    foreach ($item in @($multi)) {
+        $text = "$item"
+        if ($text.Trim() -ne '') { $parts += $text }
+    }
+    return ($parts -join "`n")
+}
+
 function Get-CommitMessage {
     param([string]$Command)
     # -m "msg" and -am "msg" first, then the long form.
@@ -109,16 +143,15 @@ try {
     $toolName = Get-Nested $payload 'preToolUse.tool' (Get-Nested $payload 'preToolUse.toolName' '')
     $parameters = Get-Field (Get-Field $payload 'preToolUse' $null) 'parameters' $null
 
-    $command = ''
-    if ($null -ne $parameters) {
-        $command = [string](Get-FieldAny $parameters @('command', 'cmd') '')
-    }
-    $command = $command.Trim()
+    $command = (Get-CommandText $parameters).Trim()
 
-    $isGitCommand = ($toolName -eq 'execute_command') -and ($command -ne '') -and ($command -match '(?i)\bgit\s')
+    # An unknown shell tool must not silently disable the guard, but guessing
+    # that any tool is a shell would run git checks on reads and edits.
+    $isShellTool = $shellToolNames -contains $toolName
+    $isGitCommand = $isShellTool -and ($command -ne '') -and ($command -match '(?i)\bgit\s')
 
     if ($isGitCommand) {
-        if ($config.Debug) { Write-HookDebug ('PreToolUse git: ' + $command) }
+        if ($config.Debug) { Write-HookDebug ('PreToolUse git via ' + $toolName + ': ' + $command) }
         $result = Get-GitGuardDecision -Config $config -Payload $payload -Command $command
     }
 } catch {
