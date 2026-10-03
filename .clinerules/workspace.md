@@ -103,7 +103,11 @@ git status --short          # index must be empty before the next add
 ```
 
 - Message format: `type(scope): summary`, imperative, no trailing period.
-- Show the user the summary the hook writes to `logs/commit-log.txt` before committing.
+- Show the user the summary the hook writes to `logs/commit-log.txt`, then wait for
+  the user's approval before running the commit. The hook only injects the summary
+  as context - it does not block a valid single-file commit, so the pause is ours.
+- Approval covers one commit only. After it, stage, commit and check that one file,
+  then show the summary again before the next file.
 - The `git-workflows` skill says to run `git add .`. The hook is stricter and
   wins: always stage the explicit path.
 - Hook logs under `.clinerules/hooks/logs/` stay untracked (nested `.gitignore`);
