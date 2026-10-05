@@ -7,9 +7,7 @@ paths:
 
 # Backend testing rules
 
-Applies when touching test sources or the Maven test configuration. The
-`testing-allure-workflows` skill covers the same ground; this file corrects its
-script name and adds what the repo actually contains.
+Applies when touching test sources or the Maven test configuration.
 
 ## Layout
 
