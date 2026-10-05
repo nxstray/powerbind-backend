@@ -14,7 +14,7 @@ every task Cline runs inside this repository.
 | File | Kind | Purpose |
 | --- | --- | --- |
 | `PostToolUse.ps1` | hook | Logs every completed tool call, trims it to a fixed length, and nudges Cline when the session's token budget is crossed. |
-| `PreToolUse.ps1` | hook | Writes a pre-commit summary and blocks bulk commits that would lump several files together. |
+| `PreToolUse.ps1` | hook | Blocks bulk commits that would lump several files together. |
 | `_lib.ps1` | helper | Shared helpers. Its name matches no hook type, so Cline never runs it directly. |
 | `.gitignore` | support | Keeps the generated `logs/` folder out of git. |
 
@@ -36,7 +36,6 @@ an extensionless `PreToolUse`. Names for the wrong platform are ignored.
 | Usage log | `PostToolUse.ps1` | Appends one line per tool call to `logs/tool-usage.txt`. |
 | Token thrift | `PostToolUse.ps1` | Stores only a truncated preview, never the full tool result. |
 | Dynamic parameters | `_lib.ps1` | Every limit is read from the environment at run time. |
-| Pre-commit summary | `PreToolUse.ps1` | Writes a summary block to `logs/commit-log.txt` and reminds Cline to show it before committing. |
 | One commit per file | `PreToolUse.ps1` | Blocks bulk commits (see below). |
 
 ### `logs/tool-usage.txt`
@@ -74,10 +73,8 @@ All of these are optional; the defaults are tuned for this repository.
 | `CLINE_HOOKS_PREVIEW_CHARS` | `160` | How much of a tool call is kept in the usage log. |
 | `CLINE_HOOKS_TOKEN_BUDGET` | `0` | Estimated token budget per task; `0` disables the nudge. |
 | `CLINE_HOOKS_ENFORCE_PER_FILE` | `true` | Set to `false` to allow bulk commits again. |
-| `CLINE_HOOKS_PRECOMMIT_SUMMARY` | `true` | Set to `false` to stop writing pre-commit summaries. |
 | `CLINE_HOOKS_LOG_DIR` | `<hooks>/logs` | Where the logs are written. |
 | `CLINE_HOOKS_USAGE_FILE` | `tool-usage.txt` | Usage log file name. |
-| `CLINE_HOOKS_SUMMARY_FILE` | `commit-log.txt` | Pre-commit summary file name. |
 | `CLINE_HOOKS_WORKSPACE` | payload / repo root | Repository the git checks run against. |
 | `CLINE_HOOKS_DEBUG` | `false` | Writes per-call diagnostics to stderr. |
 
