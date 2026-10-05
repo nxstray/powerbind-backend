@@ -50,12 +50,10 @@ function Get-HookConfig {
         HooksRoot        = $root
         LogDir           = Get-EnvString 'CLINE_HOOKS_LOG_DIR' (Join-Path $root 'logs')
         UsageFile        = Get-EnvString 'CLINE_HOOKS_USAGE_FILE' 'tool-usage.txt'
-        SummaryFile      = Get-EnvString 'CLINE_HOOKS_SUMMARY_FILE' 'commit-log.txt'
         StateFile        = Get-EnvString 'CLINE_HOOKS_STATE_FILE' 'session-state.json'
         PreviewChars     = Get-EnvInt    'CLINE_HOOKS_PREVIEW_CHARS' 160
         TokenBudget      = Get-EnvInt    'CLINE_HOOKS_TOKEN_BUDGET' 0
         EnforcePerFile   = Get-EnvBool   'CLINE_HOOKS_ENFORCE_PER_FILE' $true
-        PreCommitSummary = Get-EnvBool   'CLINE_HOOKS_PRECOMMIT_SUMMARY' $true
         Debug            = Get-EnvBool   'CLINE_HOOKS_DEBUG' $false
     }
 }
@@ -118,7 +116,9 @@ function Get-Nested {
 # ------------------------------------------------------------------- logging
 # The log directory is disposable: it is git-ignored and only ever appended to.
 
-function Ensure-HookDir {
+# "Initialize" is an approved PowerShell verb (PSUseApprovedVerbs); the helper
+# only creates the folder when it is missing, so it stays idempotent.
+function Initialize-HookDir {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return }
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -129,7 +129,7 @@ function Ensure-HookDir {
 function Add-HookLogLine {
     param([string]$Path, [string]$Line)
     $dir = Split-Path -Parent $Path
-    Ensure-HookDir $dir
+    Initialize-HookDir $dir
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::AppendAllText($Path, $Line + "`r`n", $utf8)
 }
@@ -148,7 +148,7 @@ function Read-HookState {
 function Write-HookState {
     param([string]$Path, $State)
     $dir = Split-Path -Parent $Path
-    Ensure-HookDir $dir
+    Initialize-HookDir $dir
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($Path, ($State | ConvertTo-Json -Depth 5), $utf8)
 }
