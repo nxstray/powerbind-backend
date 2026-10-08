@@ -1,11 +1,14 @@
 # CI: test + coverage, SBOM CycloneDX, SonarQube (opsional).
 #
+# Job build (test + SBOM) jalan di ubuntu-latest (GitHub-hosted).
+# Job sonar jalan di runner SELF-HOSTED (powerbind-win, PC dev) karena
+# SonarQube Server hanya ada di mesin ini (localhost:9000 tidak terjangkau
+# dari runner cloud); kelas + report JaCoCo disampaikan lewat artifact.
+#
 # Secrets repo (Settings > Secrets and variables > Actions):
-#   SONAR_HOST_URL - URL SonarQube yang TERCAPAI dari runner. Server lokal
-#                    seperti http://localhost:9000 TIDAK tercapai dari
-#                    GitHub-hosted runner (butuh server publik / self-hosted
-#                    runner). Kosong = step Sonar dilewati, build tetap jalan.
+#   SONAR_HOST_URL - URL SonarQube Server (di mesin ini: http://localhost:9000)
 #   SONAR_TOKEN    - token analisis dari SonarQube (My Account > Security).
+#   Kosong = job sonar jalan tanpa analisis (step dilewati), build tetap jalan.
 #
 # JWT_SECRET / GROQ_API_KEY di bawah hanya DUMMY untuk context test (H2) -
 # keduanya wajib resolve (application-test.properties + GroqService) dan
@@ -54,9 +57,8 @@ jobs:
           java-version: "17"
           cache: maven
 
-      # TANPA clean (konsisten dengan run-sonar-backend.ps1): urutan
-      # verify -> sbom -> sonar; JaCoCo report (di phase verify) dibutuhkan
-      # step Sonar untuk coverage.
+      # TANPA clean (konsisten dengan run-sonar-backend.ps1). JaCoCo report
+      # (phase verify) dibutuhkan job sonar untuk coverage.
       - name: Test + JaCoCo coverage (mvn verify)
         run: mvn -B verify
 
@@ -70,17 +72,18 @@ jobs:
           path: sbom/bom.json
           if-no-files-found: error
 
-      - name: SonarQube analysis
+      # Kelas + report coverage untuk job sonar (self-hosted); cukup tiga
+      # path ini saja, tidak perlu seluruh target/ (hemat storage artefak).
+      - name: Upload build output for Sonar
         if: ${{ env.SONAR_HOST_URL != '' }}
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        # sonar.token (bukan sonar.login) - wajib untuk SonarQube Server
-        # 2025.x+ / Community Build 26.9, sama seperti run-sonar-backend.ps1
-        run: >-
-          mvn -B sonar:sonar
-          -Dsonar.host.url="$SONAR_HOST_URL"
-          -Dsonar.token="$SONAR_TOKEN"
-          -Dsonar.projectKey=powerbind-backend
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-input
+          path: |
+            target/classes
+            target/test-classes
+            target/site/jacoco
+          retention-days: 1
 
       - name: Upload surefire reports
         if: failure()
@@ -89,3 +92,38 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports/
           if-no-files-found: ignore
+
+  # Analisis SonarQube di runner self-hosted (PC dev) — lihat header file.
+  sonar:
+    needs: build
+    runs-on: self-hosted
+    timeout-minutes: 20
+    env:
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      # fetch-depth: 0 WAJIB: shallow clone membuat blame / new-code detection
+      # salah (ditekankan di docs resmi SonarSource untuk GitHub Actions).
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Tanpa setup-java: runner PC dev sudah membawa JDK 17 + Maven di PATH.
+      - name: Download build output from job build
+        if: ${{ env.SONAR_HOST_URL != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: sonar-input
+          path: target
+
+      # sonar.token (bukan sonar.login) - wajib untuk SonarQube Server
+      # 2025.x+ / Community Build 26.9, sama seperti run-sonar-backend.ps1.
+      # shell: bash (Git Bash) agar sintaks "$VAR" sama dengan di Linux.
+      - name: SonarQube analysis
+        if: ${{ env.SONAR_HOST_URL != '' }}
+        shell: bash
+        run: >-
+          mvn -B sonar:sonar
+          -Dsonar.host.url="$SONAR_HOST_URL"
+          -Dsonar.token="$SONAR_TOKEN"
+          -Dsonar.projectKey=powerbind-backend
