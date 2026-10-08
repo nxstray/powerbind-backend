@@ -1,0 +1,18 @@
+# Powerbind TLS reverse proxy — routes HTTPS traffic to backend & frontend.
+# SITE_ADDRESS comes from docker-compose environment:
+#   localhost      -> Caddy uses its internal CA (self-signed, browser warning)
+#   example.com    -> automatic Let's Encrypt certificate (ports 80/443 open)
+
+{$SITE_ADDRESS:localhost} {
+	# Backend API + WebSocket + actuator + swagger
+	@api path /api/* /actuator/* /ws/* /v3/api-docs* /swagger-ui* /swagger-ui.html /error
+
+	handle @api {
+		reverse_proxy backend:8045
+	}
+
+	# Everything else goes to the Vue frontend
+	handle {
+		reverse_proxy frontend:80
+	}
+}
