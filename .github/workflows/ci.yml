@@ -118,12 +118,13 @@ jobs:
 
       # sonar.token (bukan sonar.login) - wajib untuk SonarQube Server
       # 2025.x+ / Community Build 26.9, sama seperti run-sonar-backend.ps1.
-      # shell: bash (Git Bash) agar sintaks "$VAR" sama dengan di Linux.
+      # Sengaja shell default pwsh, BUKAN bash: "bash" di mesin ini adalah
+      # WSL (system32\bash.exe) yang mengartikan \ sebagai escape sehingga
+      # path script sementara rusak menjadi "C:PlatformIO...sh".
       - name: SonarQube analysis
         if: ${{ env.SONAR_HOST_URL != '' }}
-        shell: bash
         run: >-
           mvn -B sonar:sonar
-          -Dsonar.host.url="$SONAR_HOST_URL"
-          -Dsonar.token="$SONAR_TOKEN"
+          -Dsonar.host.url=$env:SONAR_HOST_URL
+          -Dsonar.token=$env:SONAR_TOKEN
           -Dsonar.projectKey=powerbind-backend
