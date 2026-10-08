@@ -1,0 +1,91 @@
+# CI: test + coverage, SBOM CycloneDX, SonarQube (opsional).
+#
+# Secrets repo (Settings > Secrets and variables > Actions):
+#   SONAR_HOST_URL - URL SonarQube yang TERCAPAI dari runner. Server lokal
+#                    seperti http://localhost:9000 TIDAK tercapai dari
+#                    GitHub-hosted runner (butuh server publik / self-hosted
+#                    runner). Kosong = step Sonar dilewati, build tetap jalan.
+#   SONAR_TOKEN    - token analisis dari SonarQube (My Account > Security).
+#
+# JWT_SECRET / GROQ_API_KEY di bawah hanya DUMMY untuk context test (H2) -
+# keduanya wajib resolve (application-test.properties + GroqService) dan
+# runner tidak punya .env. JANGAN menaruh secret asli di file ini.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Redis dibutuhkan suite test: /actuator/health (ApplicationSmokeTest)
+    # mengecek koneksi Redis di localhost:6379 — di mesin dev itu container
+    # `redis` (6379:6379), di runner disediakan service container ini. Rate
+    # limiter sendiri mati di profile test (RedisRateLimitFilter @Profile("!test")).
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # >= 32 byte: Keys.hmacShaKeyFor menolak key lebih pendek dari itu
+      JWT_SECRET: ci-dummy-jwt-secret-0123456789abcdef0123456789abcdef0123456789abcdef
+      GROQ_API_KEY: ci-dummy-groq-key
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # TANPA clean (konsisten dengan run-sonar-backend.ps1): urutan
+      # verify -> sbom -> sonar; JaCoCo report (di phase verify) dibutuhkan
+      # step Sonar untuk coverage.
+      - name: Test + JaCoCo coverage (mvn verify)
+        run: mvn -B verify
+
+      - name: SBOM (CycloneDX)
+        run: mvn -B -q cyclonedx:makeBom
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom/bom.json
+          if-no-files-found: error
+
+      - name: SonarQube analysis
+        if: ${{ env.SONAR_HOST_URL != '' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # sonar.token (bukan sonar.login) - wajib untuk SonarQube Server
+        # 2025.x+ / Community Build 26.9, sama seperti run-sonar-backend.ps1
+        run: >-
+          mvn -B sonar:sonar
+          -Dsonar.host.url="$SONAR_HOST_URL"
+          -Dsonar.token="$SONAR_TOKEN"
+          -Dsonar.projectKey=powerbind-backend
+
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
