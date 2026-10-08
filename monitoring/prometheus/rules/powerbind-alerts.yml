@@ -1,0 +1,51 @@
+# Alert rules Powerbind. Dimuat Prometheus lewat `rule_files` di prometheus.yml
+# (folder di-mount read-only dari ./monitoring/prometheus/rules).
+#
+# Catatan: belum ada service Alertmanager di docker-compose, jadi alert yang
+# firing terlihat di Prometheus UI (/alerts) dan API /api/v1/alerts — belum
+# dikirim ke email/Slack. Semua metric di bawah sudah dipastikan muncul di
+# /actuator/prometheus milik backend versi ini.
+groups:
+  - name: powerbind-backend
+    rules:
+      - alert: PowerbindBackendDown
+        expr: up{job="powerbind-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend Powerbind tidak bisa di-scrape"
+          description: "Target {{ $labels.instance }} gagal di-scrape ≥2 menit: container mati, /actuator/prometheus tidak diizinkan, atau port 8045 tertutup."
+
+      - alert: PowerbindServerErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="powerbind-backend", outcome="SERVER_ERROR"}[5m]))
+            /
+          sum(rate(http_server_requests_seconds_count{job="powerbind-backend"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rasio error 5xx backend > 5%"
+          description: "Lebih dari 5% request backend berakhir 5xx selama 5 menit terakhir."
+
+      - alert: PowerbindHeapUsageHigh
+        expr: |
+          sum(jvm_memory_used_bytes{job="powerbind-backend", area="heap"})
+            /
+          sum(jvm_memory_max_bytes{job="powerbind-backend", area="heap"}) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Heap JVM backend > 90%"
+          description: "Pemakaian heap di atas 90% selama 10 menit — mem_limit container 1280m dengan MaxRAMPercentage=50 (heap ±640m), jadi ini mendekati OOMKilled."
+
+      - alert: PowerbindDbPoolSaturated
+        expr: hikaricp_connections_active{job="powerbind-backend"} >= (hikaricp_connections_max{job="powerbind-backend"} * 0.9)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Connection pool HikariCP backend hampir penuh"
+          description: "Koneksi aktif ≥90% dari maksimum selama 5 menit — kemungkinan query lambat atau kebocoran koneksi."
