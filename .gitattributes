@@ -1,0 +1,7 @@
+# Shell scripts must stay LF - the mosquitto entrypoint runs in a Linux
+# container and fails with $'\r': command not found on CRLF.
+*.sh text eol=lf
+
+# Generated SBOM (CycloneDX) and OWASP ZAP DAST reports
+sbom/
+zap/
