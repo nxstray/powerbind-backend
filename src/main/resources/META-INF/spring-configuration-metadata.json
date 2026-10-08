@@ -122,6 +122,16 @@
       "description": "Client id prefix for the backend inbound and outbound MQTT adapters."
     },
     {
+      "name": "mqtt.username",
+      "type": "java.lang.String",
+      "description": "MQTT broker username. Empty = anonymous connection (local dev); set when the broker runs with allow_anonymous=false."
+    },
+    {
+      "name": "mqtt.password",
+      "type": "java.lang.String",
+      "description": "MQTT broker password, only used together with mqtt.username."
+    },
+    {
       "name": "mqtt.topic.presence",
       "type": "java.lang.String",
       "defaultValue": "smart-home/presence/#",
