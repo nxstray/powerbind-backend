@@ -16,8 +16,20 @@ import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
 @Configuration
 public class MqttClientFactoryConfig {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(MqttClientFactoryConfig.class);
+
     @Value("${mqtt.broker-url}")
     private String brokerUrl;
+
+    // empty = anonymous connection (local dev against the native broker);
+    // docker-compose sets both because the containerized Mosquitto runs
+    // with allow_anonymous=false
+    @Value("${mqtt.username:}")
+    private String username;
+
+    @Value("${mqtt.password:}")
+    private String password;
 
     @Bean
     public MqttPahoClientFactory mqttClientFactory() {
@@ -30,6 +42,13 @@ public class MqttClientFactoryConfig {
         // keep trying to reconnect every 10 seconds if broker is unavailable at startup
         options.setConnectionTimeout(10);
         options.setKeepAliveInterval(30);
+        if (username != null && !username.isBlank()) {
+            options.setUserName(username);
+            if (password != null && !password.isBlank()) {
+                options.setPassword(password.toCharArray());
+            }
+            log.info("[MQTT] Authenticating to broker as user '{}'", username);
+        }
         factory.setConnectionOptions(options);
         return factory;
     }
