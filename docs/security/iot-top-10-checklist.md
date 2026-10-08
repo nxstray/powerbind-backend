@@ -12,7 +12,7 @@ Kolom Status: `Belum`, `Sebagian`, `OK`, `N/A`.
 
 | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|
-| Sebagian | Kredensial MQTT per perangkat, bukan satu user/password default yang sama untuk semua | Broker internal docker private network saat ini; konfigurasi multi-user ACL dapat ditambahkan di Mosquitto. |
+| Sebagian | Kredensial MQTT per perangkat, bukan satu user/password default yang sama untuk semua | Akun per device dibuat dari `MQTT_DEVICE_USERS` (`user:pass;user2:pass2`) oleh `mosquitto/entrypoint.sh`; semua device masih berbagi pola ACL yang sama — isolasi topik per-device penuh menunggu topik yang dipisah per device ID. |
 | OK | Tidak ada password default `admin/admin`-style yang tersisa di dev/prod | Diwajibkan konfigurasi via `.env` (`DB_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, `INFLUXDB_ADMIN_PASSWORD`). DataInitializer memblokir pembuatan admin jika password kosong. |
 | OK | Tidak ada kredensial perangkat yang ditulis di repo atau di firmwares | File `.env` diabaikan oleh `.gitignore`; tidak ada secret yang di-commit ke Git. |
 
@@ -22,7 +22,7 @@ Kolom Status: `Belum`, `Sebagian`, `OK`, `N/A`.
 |---|---|---|
 | OK | Port MQTT (1883/8883) tidak terbuka ke jaringan luas tanpa perlu | Port MQTT di-map ke localhost/LAN (`0.0.0.0:1884->1883`), dilindungi perimeter firewall jaringan lokal. |
 | N/A | Tidak ada layanan diagnostik perangkat (web server ESP32, telnet, OTA tanpa auth) yang terbuka | ESP32 bertindak sebagai MQTT client murni (outbound connect), tidak menjalankan server terbuka/listening port di perangkat. |
-| Sebagian | Mosquitto tidak mengizinkan anonymous client | Berjalan di private docker network; disarankan mengaktifkan `allow_anonymous false` untuk koneksi non-localhost. |
+| OK | Mosquitto tidak mengizinkan anonymous client | Broker container: `allow_anonymous false` + `password_file` digenerate `entrypoint.sh` dari `.env` setiap start. Terverifikasi uji live: koneksi anonim ditolak broker (`not authorised`). |
 
 ## I3 - Insecure Ecosystem Interfaces
 
@@ -30,7 +30,7 @@ Kolom Status: `Belum`, `Sebagian`, `OK`, `N/A`.
 |---|---|---|
 | OK | Web/API/cloud interface (backend + Grafana + Prometheus) tidak default-terbuka | Backend API dilindungi JWT Authentication (`SecurityConfig`); endpoint admin dilindungi Role `ADMIN`. |
 | OK | Grafana/SonarQube/InfluxDB tidak memakai password default | Password admin dimuat via environment variable di `docker-compose.yml` (`GRAFANA_ADMIN_PASSWORD`, `INFLUXDB_ADMIN_PASSWORD`). |
-| Sebagian | Topik MQTT dibatasi per perangkat: perangkat A tidak bisa mempublish ke topik perangkat B | Topik distrukturkan per room (`smart-home/presence/{room}`); backend memvalidasi keberadaan room di database (`findByMqttTopic`). |
+| Sebagian | Topik MQTT dibatasi per perangkat: perangkat A tidak bisa mempublish ke topik perangkat B | `acl_file` per user (digenerate dari `.env`): backend `readwrite smart-home/#`, device hanya publish `presence/power/logs` + read `relay` — uji live mengonfirmasi device DITOLAK publish ke relay. Per-room isolation belum (satu akun device mewakili semua room). |
 
 ## I4 - Lack of Secure Update Mechanism
 
@@ -61,10 +61,10 @@ Kolom Status: `Belum`, `Sebagian`, `OK`, `N/A`.
 
 | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|
-| Sebagian | MQTT memakai TLS (8883) atau minimal berada di jaringan tepercaya yang jelas batasnya | Mosquitto berjalan di private docker bridge network; host binding dibatasi. |
-| Sebagian | HTTP API memakai HTTPS di produksi | Dev/localhost HTTP; siap diteruskan via reverse proxy HTTPS/TLS untuk deployment cloud. |
+| OK | MQTT memakai TLS (8883) atau minimal berada di jaringan tepercaya yang jelas batasnya | Listener TLS 8883 aktif saat sertifikat ada (`.\run-mosquitto-certs.ps1`, self-signed); pub/sub via 8883 terverifikasi uji live. Port 1883/1884 tetap plain untuk dev dengan autentikasi wajib. |
+| OK | HTTP API memakai HTTPS di produksi | Service `caddy` di docker-compose: redirect HTTP→HTTPS (308) + TLS termination di depan frontend/backend; `SITE_ADDRESS` localhost (internal CA) atau domain (Let's Encrypt otomatis). Terverifikasi curl handshake TLS. |
 | OK | Data sensitif di database tidak dalam bentuk plaintext | Password di-hash menggunakan BCrypt; token internal tersimpan aman di Postgres. |
-| Sebagian | Backup database terenkripsi/dilindungi | Menggunakan Docker volumes terisolasi. |
+| OK | Backup database terenkripsi/dilindungi | Service `backup` di compose: `pg_dump` + `influx backup` harian + rotasi 7 hari ke `./backups/` (git-ignored); volume Docker terisolasi. Enkripsi at-rest belum diterapkan (DB aktif juga tidak dienkripsi). |
 
 ## I8 - Lack of Device Management
 
