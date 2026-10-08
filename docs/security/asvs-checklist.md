@@ -104,9 +104,9 @@ OAuth/OIDC. Bab ini baru relevan kalau nanti ditambahkan login Google/SSO.
 
 | Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
-| 1 | Sebagian | HTTP produksi memakai TLS (bukan hanya localhost) | Di localhost/dev memakai HTTP; konfigurasi reverse proxy (nginx/Caddy) disiapkan saat deploy domain publik. |
-| 1 | Sebagian | MQTT memakai TLS dan autentikasi (bukan anonymous di port 1883 terbuka) | Menggunakan broker Mosquitto internal stack Docker (`powerbind-mosquitto`); port 1884 dialihkan lokal. |
-| 2 | Belum | Sertifikat & cipher dikonfigurasi, tidak memakai default lemah | Nginx/Mosquitto SSL certbot / TLS setup di server target. |
+| 1 | OK | HTTP produksi memakai TLS (bukan hanya localhost) | Caddy (`caddy/Caddyfile` + service `caddy`): redirect 308 ke HTTPS + TLS aktif; `SITE_ADDRESS` di `.env` — localhost memakai internal CA, domain memakai Let's Encrypt. Terverifikasi curl `https://localhost/...`. |
+| 1 | OK | MQTT memakai TLS dan autentikasi (bukan anonymous di port 1883 terbuka) | Autentikasi wajib di semua listener (`allow_anonymous false`, password + ACL dari `.env`); TLS listener 8883 (sertifikat via `run-mosquitto-certs.ps1`); backend container mengirim `MQTT_USERNAME`/`MQTT_PASSWORD`. Terverifikasi uji live: anonim ditolak + pub/sub via 8883. |
+| 2 | Sebagian | Sertifikat & cipher dikonfigurasi, tidak memakai default lemah | Caddy mengelola sertifikat (internal CA localhost / Let's Encrypt domain publik, TLS 1.2+ default); Mosquitto memakai self-signed (`run-mosquitto-certs.ps1`). Audit cipher end-to-end per device belum. |
 
 ## V13 - Configuration
 
@@ -122,7 +122,7 @@ OAuth/OIDC. Bab ini baru relevan kalau nanti ditambahkan login Google/SSO.
 | Lv | Status | Yang perlu dicek | Cek di / Bukti |
 |---|---|---|---|
 | 1 | OK | Data sensitif (password, token, data kehadiran penghuni) tidak masuk log | Password selalu di-hash sebelum disimpan; logger tidak memuntahkan plain credentials atau raw JWT header. |
-| 1 | Sebagian | Backup Postgres/InfluxDB ada dan dilindungi | Volume Docker terisolasi (`powerbind_postgres_data`, `powerbind_influxdb_data`); backup terjadwal perlu prosedur operasional server. |
+| 1 | OK | Backup Postgres/InfluxDB ada dan dilindungi | Service `backup` di compose: `pg_dump` + `influx backup` terjadwal (cron harian, default 02:00 UTC) ke `./backups/` (git-ignored) dengan rotasi otomatis (`BACKUP_RETENTION_DAYS`, default 7 hari); volume Docker terisolasi. Terverifikasi uji live: dump + TSM shard masuk, log `backup OK`. |
 | 2 | OK | Data kehadiran diperlakukan sebagai data pribadi: retensi & akses dibatasi | Bucket InfluxDB `smarthome` dikhususkan untuk time-series presence; endpoint querying terlindung autentikasi JWT. |
 
 ## V15 - Secure Coding and Architecture
