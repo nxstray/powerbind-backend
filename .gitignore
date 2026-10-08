@@ -41,3 +41,9 @@ repomix-*.xml
 # Generated SBOM (CycloneDX) and OWASP ZAP DAST reports
 sbom/
 zap/
+
+# Scheduled database backups (written by the `backup` compose service)
+backups/
+
+# Mosquitto TLS certs (created by run-mosquitto-certs.ps1 - never commit keys)
+mosquitto/certs/
