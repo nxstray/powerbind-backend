@@ -13,7 +13,13 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-COPY --from=build /app/target/*.jar app.jar
+# Hardening: proses JVM jalan sebagai user non-root (image yang jalan sebagai
+# root ditandai oleh Trivy/docker scout). "app" = system user tanpa password.
+RUN addgroup -S app && adduser -S app -G app
+
+COPY --from=build --chown=app:app /app/target/*.jar app.jar
+
+USER app
 
 EXPOSE 8045
 ENTRYPOINT ["java", "-jar", "app.jar"]
