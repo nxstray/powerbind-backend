@@ -99,6 +99,8 @@ cp .env.example .env   # then fill in the real values
 | `MQTT_DEVICE_USERS` | — | — | Device accounts for the broker: `user:pass;user2:pass2` (may publish `presence/power/logs`, may read `relay`) |
 | `SITE_ADDRESS` | — | `localhost` | Public address of the Caddy TLS proxy — a real domain switches it to automatic Let's Encrypt certificates |
 | `INFLUXDB_URL` / `_ORG` / `_BUCKET` | — | `http://localhost:8086` / `powerbind` / `smarthome` | InfluxDB connection |
+| `GRAFANA_ADMIN_PASSWORD` | — | `admin` | Grafana login (the persisted volume wins over a later change) |
+| `PROMETHEUS_BASE_URL` | — | `http://localhost:9090` | Prometheus API the admin metrics proxy queries; compose sets `http://prometheus:9090` |
 | `GROQ_MAX_TOKENS` | — | `1024` | AI response cap |
 | `CORS_ALLOWED_ORIGINS` | — | `http://localhost:5173` | Frontend origin |
 | `APP_DEFAULT_USER_USERNAME` / `_PASSWORD` | — | `admin` / *(none)* | Initial admin account, created on first startup |
@@ -106,6 +108,7 @@ cp .env.example .env   # then fill in the real values
 | `LOKI_URL` | — | `http://localhost:3100` | Loki base URL for the admin log proxy (`/api/admin/logs`) |
 | `BACKUP_CRON` | — | `0 2 * * *` | Cron schedule of the `backup` service (container clock runs **UTC**) |
 | `BACKUP_RETENTION_DAYS` | — | `7` | Delete backups older than N days |
+| `SPRINGDOC_ENABLED` | — | `true` (compose sets `false`) | Swagger UI + `/v3/api-docs`. Off in the containerized deployment, still on for `mvn spring-boot:run` |
 
 > **Accounts:** there is **no self-registration**. Users are seeded on startup by `DataInitializer` from `.env` (passwords stored bcrypt-hashed). The single default user becomes **ADMIN** (gets the ERD/Log pages); with `APP_FAMILY_USERS` everyone starts as **USER** — promote someone with `UPDATE users SET role = 'ADMIN' WHERE username = '...';`
 
@@ -147,6 +150,13 @@ docker compose down       # stop
 |---|---|---|
 | Grafana | http://localhost:3000 | login `admin` / `admin` — explore logs & dashboards |
 | Loki | http://localhost:3100 | log aggregation target |
+| Prometheus | http://localhost:9090 | metrics + alert rules (`/alerts`) |
+
+> **Bound to `127.0.0.1`:** Prometheus, Grafana, Loki and SonarQube publish to
+> loopback only, so the LAN cannot reach them. Port `8045` (API/LAN), `1884`
+> (MQTT) and `8883` (MQTT over TLS) stay open for devices on purpose. The host
+> side of the first four is what changed — inside the compose network the
+> backend still talks to `prometheus:9090`, `loki:3100` and so on.
 
 > Note: `docker compose up -d` starts the whole stack — databases, observability, backend, frontend, TLS proxy and the scheduled `backup` service. The backend can alternatively run natively with `mvn spring-boot:run` (see above).
 
