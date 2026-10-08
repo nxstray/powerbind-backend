@@ -118,13 +118,16 @@ jobs:
 
       # sonar.token (bukan sonar.login) - wajib untuk SonarQube Server
       # 2025.x+ / Community Build 26.9, sama seperti run-sonar-backend.ps1.
-      # Sengaja shell default pwsh, BUKAN bash: "bash" di mesin ini adalah
-      # WSL (system32\bash.exe) yang mengartikan \ sebagai escape sehingga
-      # path script sementara rusak menjadi "C:PlatformIO...sh".
+      # Sengaja tanpa shell bash: "bash" di mesin ini adalah WSL
+      # (system32\bash.exe) yang mengartikan \ sebagai escape sehingga path
+      # script sementara rusak. Shell = PowerShell 5.1 (pwsh tak terpasang);
+      # tiap argumen -D WAJIB dikutip, kalau tidak PowerShell 5.1 memotong
+      # "-Dsonar.host.url=..." jadi "-Dsonar" + ".host.url=..." dan Maven
+      # gagal resolve plugin.
       - name: SonarQube analysis
         if: ${{ env.SONAR_HOST_URL != '' }}
         run: >-
           mvn -B sonar:sonar
-          -Dsonar.host.url=$env:SONAR_HOST_URL
-          -Dsonar.token=$env:SONAR_TOKEN
-          -Dsonar.projectKey=powerbind-backend
+          "-Dsonar.host.url=$env:SONAR_HOST_URL"
+          "-Dsonar.token=$env:SONAR_TOKEN"
+          "-Dsonar.projectKey=powerbind-backend"
