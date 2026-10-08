@@ -69,6 +69,7 @@ Target yang disarankan: **Level 1 penuh dulu** (semua item L1), baru sebagian L2
 |---|---|---|---|
 | 1 | OK | Logout benar-benar mengakhiri sesi (token tidak bisa dipakai lagi) | `AuthService.logout` mencabut refresh token (`revoked = true`) di database Postgres. |
 | 2 | OK | Refresh token punya rotasi atau deteksi pemakaian ulang | `AuthService.refresh` menghasilkan token pair baru, mencabut token lama, dan mendeteksi reuse (bila token revoked dipakai lagi, seluruh sesi user dicabut). |
+| 2 | OK | Token/sesi kedaluwarsa tidak menumpuk di database | `RefreshTokenCleanupService` (cron 03:30 UTC harian) menyapu token yang lewat `expiresAt` lewat `deleteByExpiresAtBefore(now)`; token revoked-belum-kedaluwarsa sengaja disimpan karena dipakai deteksi reuse. Terverifikasi `RefreshTokenCleanupServiceTest` + service ikut konteks Spring (`ApplicationSmokeTest`). |
 
 ## V8 - Authorization
 
@@ -115,6 +116,7 @@ OAuth/OIDC. Bab ini baru relevan kalau nanti ditambahkan login Google/SSO.
 | 1 | OK | Secret lewat environment/`.env`, tidak di-commit | Seluruh secret (`JWT_SECRET`, database pass, Influx token, Groq key) dimuat via `.env` dan diabaikan Git (`.gitignore`). |
 | 1 | OK | Debug/dev mode mati di produksi (`spring.jpa.show-sql`, Swagger terbuka, dsb.) | `spring.jpa.show-sql=false`, `management.endpoint.health.show-details=never`. |
 | 1 | OK | Dependency bebas dari CVE yang diketahui, dan diperiksa berkala | Pipeline CycloneDX SBOM terkonfigurasi di backend (`run-sbom-backend.ps1`) dan frontend (`run-sbom-frontend.ps1`); dependency tree bersih. |
+| 1 | OK | Alerting untuk kondisi produksi (backend mati, error 5xx, heap, pool DB) | `monitoring/prometheus/rules/powerbind-alerts.yml` (4 rule: `PowerbindBackendDown`, `PowerbindServerErrorRate`, `PowerbindHeapUsageHigh`, `PowerbindDbPoolSaturated`) dimuat Prometheus via `rule_files`; terverifikasi `promtool check config` + `/api/v1/rules` (4 rules, semua `inactive` saat sehat). Alertmanager belum ada, jadi alert firing hanya terlihat di Prometheus UI `/alerts`. |
 | 2 | OK | Port tidak dipublikasikan lebih luas dari yang perlu (Prometheus/Grafana/SonarQube tidak ke publik) | `docker-compose.yml` mengisolasi service backend dalam private network; Prometheus di-scrape internal. |
 
 ## V14 - Data Protection
