@@ -95,12 +95,17 @@ cp .env.example .env   # then fill in the real values
 | `JWT_REFRESH_EXPIRATION` | — | `604800000` | Refresh token lifetime (ms) |
 | `REDIS_HOST` / `REDIS_PORT` | — | `localhost:6379` | Redis connection |
 | `MQTT_BROKER_URL` | — | `tcp://localhost:1883` | Mosquitto broker |
+| `MQTT_BACKEND_USERNAME` / `MQTT_BACKEND_PASSWORD` | yes (compose) | `powerbind-backend` / — | Broker auth — containerized Mosquitto runs `allow_anonymous=false`; the password file is generated from these on every start |
+| `MQTT_DEVICE_USERS` | — | — | Device accounts for the broker: `user:pass;user2:pass2` (may publish `presence/power/logs`, may read `relay`) |
+| `SITE_ADDRESS` | — | `localhost` | Public address of the Caddy TLS proxy — a real domain switches it to automatic Let's Encrypt certificates |
 | `INFLUXDB_URL` / `_ORG` / `_BUCKET` | — | `http://localhost:8086` / `powerbind` / `smarthome` | InfluxDB connection |
 | `GROQ_MAX_TOKENS` | — | `1024` | AI response cap |
 | `CORS_ALLOWED_ORIGINS` | — | `http://localhost:5173` | Frontend origin |
 | `APP_DEFAULT_USER_USERNAME` / `_PASSWORD` | — | `admin` / *(none)* | Initial admin account, created on first startup |
 | `APP_FAMILY_USERS` | — | — | Multiple accounts, overrides the default admin. Format: `user:pass:Display;user2:pass2:Display2` |
 | `LOKI_URL` | — | `http://localhost:3100` | Loki base URL for the admin log proxy (`/api/admin/logs`) |
+| `BACKUP_CRON` | — | `0 2 * * *` | Cron schedule of the `backup` service (container clock runs **UTC**) |
+| `BACKUP_RETENTION_DAYS` | — | `7` | Delete backups older than N days |
 
 > **Accounts:** there is **no self-registration**. Users are seeded on startup by `DataInitializer` from `.env` (passwords stored bcrypt-hashed). The single default user becomes **ADMIN** (gets the ERD/Log pages); with `APP_FAMILY_USERS` everyone starts as **USER** — promote someone with `UPDATE users SET role = 'ADMIN' WHERE username = '...';`
 
@@ -131,7 +136,7 @@ java -jar target/backend-0.0.1-SNAPSHOT.jar
 
 ---
 
-## Docker Compose (Loki + Grafana)
+## Docker Compose (full stack)
 
 ```bash
 docker compose up -d      # start
@@ -143,7 +148,23 @@ docker compose down       # stop
 | Grafana | http://localhost:3000 | login `admin` / `admin` — explore logs & dashboards |
 | Loki | http://localhost:3100 | log aggregation target |
 
-> Note: Compose runs the **observability stack only** — the backend itself is still started with Maven (see above).
+> Note: `docker compose up -d` starts the whole stack — databases, observability, backend, frontend, TLS proxy and the scheduled `backup` service. The backend can alternatively run natively with `mvn spring-boot:run` (see above).
+
+### Scheduled backups (Postgres + InfluxDB)
+
+The `backup` service runs `pg_dump` + `influx backup` on an in-container cron (default: daily at **02:00 UTC**) into `./backups/` (git-ignored). Files older than the retention window are rotated away automatically.
+
+| Variable (`.env`) | Default | Meaning |
+|---|---|---|
+| `BACKUP_CRON` | `0 2 * * *` | cron schedule of the backup job |
+| `BACKUP_RETENTION_DAYS` | `7` | delete backups older than N days |
+
+```powershell
+docker compose exec backup /usr/local/bin/backup.sh      # run a backup now
+docker compose exec backup tail -20 /var/log/backup.log  # log of past runs
+```
+
+Restore: `pg_restore` from `backups/postgres/*.dump`; `influx restore <dir>` for InfluxDB.
 
 ---
 
@@ -171,6 +192,8 @@ Notes:
 - Performance (`performance`) and UI (`ui`) tests are **excluded by default** in `pom.xml` (`excludedGroups=requires-groq,performance,ui`), so plain `mvn test` never runs them.
 - Selenium credentials are passed as system properties (`-Dselenium.username/-Dselenium.password`) — never hardcoded; headless Chrome via WebDriverManager.
 - All results accumulate in `target/allure-results`; use `.\run-allure.ps1 -Clean` for a fresh report.
+- **Redis is required for the suite**: `/actuator/health` (`ApplicationSmokeTest`) probes Redis on `localhost:6379` — start the dev container first (`docker start redis`). The rate limiter itself is disabled in the test profile (`@Profile("!test")`).
+- **CI:** `.github/workflows/ci.yml` runs the same default suite (`mvn verify`, with a Redis service container on 6379) plus a CycloneDX SBOM upload on every push/PR. The SonarQube step only runs when the repo secrets `SONAR_HOST_URL` + `SONAR_TOKEN` are set and the server is reachable from the runner.
 
 ---
 
@@ -239,6 +262,8 @@ ESP32 sensors publish to:
 | `smart-home/presence/#` | room presence events |
 | `smart-home/power/#` | PZEM-004T readings (Watts, Voltage, Current, kWh) |
 
+Devices must authenticate against the broker (accounts come from `MQTT_DEVICE_USERS` in `.env`) and subscribe to `smart-home/relay/+/set` for relay commands. The containerized broker rejects anonymous clients; for TLS devices connect to port **8883** after `.\run-mosquitto-certs.ps1`.
+
 ### 8. Admin — ERD & logs (ADMIN only)
 
 Both endpoints are gated by `hasRole('ADMIN')` — the role is embedded in the JWT at login and turned into a `ROLE_ADMIN` authority by `JwtAuthFilter`.
@@ -258,6 +283,9 @@ curl "http://localhost:8045/api/admin/logs?source=ALL&since=1h&limit=300" -H "Au
 - Rate limit: **30 requests / 60 s** per client (Redis sliding window)
 - Login lockout: **5 failed attempts → 10 minutes**
 - Role-based access: `/api/admin/**` requires the `ADMIN` role (role claim in the JWT)
+- **MQTT**: anonymous clients rejected (`allow_anonymous=false`); password file + per-user ACL generated from `.env` at broker start; optional TLS listener **8883** via `.\run-mosquitto-certs.ps1`
+- **HTTPS**: the `caddy` service terminates TLS in front of frontend + backend (`SITE_ADDRESS` in `.env`) — `http://` is redirected to `https://`
+- **Container hardening**: the backend image runs as a **non-root** user (`USER app` in `Dockerfile`); compose healthchecks (postgres/redis/influxdb/backend) gate startup through `depends_on: service_healthy`
 
 ---
 
