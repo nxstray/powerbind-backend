@@ -43,7 +43,7 @@ through `excludedGroups`; do not widen that list without being asked.
 
 Satu file per commit; bulk staging diblokir hook `PreToolUse.ps1`. Stage path
 spesifik, jangan `git add .` / `-A` / `commit -a`. Format pesan
-`type(scope): summary`, imperatif, tanpa titik. Commit hanya jika diminta.
+`type(scope): summary`, imperatif, tanpa titik. Commit hanya jika diminta. Sebelum commit, tampilkan SATU ringkasan batch di chat (tanpa ask_question per file): daftar file + `git diff --stat` + 1 kalimat isi tiap diff, diakhiri kalimat: bilang 'commit' jika sudah selesai reviewnya. Tunggu kata `commit` eksplisit sebelum `git add`/`commit` apapun; satu persetujuan hanya untuk batch yang diringkas itu.
 
 ## Done means
 
