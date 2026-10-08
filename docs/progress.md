@@ -1,16 +1,11 @@
 # Progress - backend
 
-Selesai: perbaikan kanvas kosong di Wokwi. Akar masalah: attrs PIR bertipe number
-(`delayTime: 10`) — dokumentasi Wokwi bertipe string; versi awal user ("10") tampil,
-angka bikin diagram gagal load tanpa error. `wokwi/diagram.json`
-disamakan dengan versi Claude yang terverifikasi tampil: attrs string "10"/"1" + 4 koordinat
-part dirapikan (84.6/102.25, 9.1/116.6, 84.6/179.05, 9.1/193.4). Validasi: JSON parse 8 part /
-19 conns, id unik, pin bb valid, 0 attrs numerik, grep rahasia nol.
-src/main.cpp tak disentuh — SHA256: 782ADC2CA9E4B69F482C771FBAAB0B0118C56D93CEB8DB0FE12F7B2D0D792CB2
+Selesai: 3 poin BLOCKING. (1) Backup terjadwal: service `backup` (image `backup/Dockerfile` FROM influxdb:2.7 + PGDG postgresql-client-16 + cron; `backup.sh` pg_dump -Fc + influx backup + rotasi `BACKUP_RETENTION_DAYS`; `entrypoint.sh` menyalin env ke /run/backup.env (cron tak mewarisi env), membuat /etc/cron.d dari `BACKUP_CRON` default `0 2 * * *` UTC, backup awal saat start) → `./backups/` (git-ignored). Uji live: log `backup OK`, dump 18 KB + TSM shard masuk; 2 bug awal terbukti & diperbaiki (pg_dump 15 nolak server 16 → repo PGDG; flag `--compress` tak ada → gzip default). (2) CI/CD: `.github/workflows/ci.yml` = `mvn verify` (dummy JWT_SECRET≥32byte + GROQ_API_KEY, Redis service container 6379) + upload artifact SBOM; step Sonar hanya jalan bila secrets `SONAR_HOST_URL`/`SONAR_TOKEN` di-set; tervalidasi js-yaml. (3) Hardening: Dockerfile `USER app` (uid 100 di container), healthcheck compose postgres/redis/influxdb/backend + backend `depends_on: service_healthy`; live: 4 container (healthy) + actuator UP. `mvn test` polos 145/145 exit 0 memakai container `redis` (6379:6379). Semua file (termasuk progress.md ini) di-commit 1-file-per-commit dan di-push ke origin/main; secrets Actions SONAR_HOST_URL + SONAR_TOKEN sudah di-set.
 
-File diubah: `smart-home-thesis/wokwi/diagram.json`, `docs/progress.md`.
+File diubah: Dockerfile, docker-compose.yml, .gitignore, .env.example, README.md, docs/security/asvs-checklist.md, docs/security/iot-top-10-checklist.md, docs/progress.md; baru: backup/Dockerfile, backup/backup.sh, backup/entrypoint.sh, .github/workflows/ci.yml.
 
-Berikutnya: user paste file ini ke proyek Wokwi → Play → cek komponen muncul + 3 state LED.
-`diagram.json` lama di root masih ada (bukan bagian paket, aman dihapus manual).
-Error `PubSubClient.h` sebelumnya: pasang libraries.txt di proyek Wokwi. Relay + PZEM: deferred.
-
+Berikutnya: pantau run CI pertama di GitHub (`gh run list`) — perhatikan secret `SONAR_HOST_URL` masih localhost, langkah Sonar akan gagal dari GitHub-hosted runner (hapus secret sementara / pakai URL terjangkau / self-hosted runner); sebelum `mvn test` lokal jalankan `docker start redis` dulu.
+- [PENTING] Firmware ESP32: akun MQTT (MQTT_DEVICE_USERS) + port 8883/TLS di sisi alat
+- [PENTING] Gating Swagger+actuator/prometheus utk produksi; cleanup token/data expired; alerting Prometheus
+- [PENTING] Bind port infra compose ke 127.0.0.1; server.shutdown=graceful + resource limits
+- [OPSIONAL] Audit trail aksi relay; Trivy image scan rutin; authz per-room (by design, tercatat)
