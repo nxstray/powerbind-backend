@@ -47,3 +47,6 @@ backups/
 
 # Mosquitto TLS certs (created by run-mosquitto-certs.ps1 - never commit keys)
 mosquitto/certs/
+
+# Session handoff (local-only, never push)
+docs/progress.md
