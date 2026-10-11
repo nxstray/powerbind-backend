@@ -37,7 +37,7 @@ through `excludedGroups`; do not widen that list without being asked.
 - Perubahan sekecil mungkin, laporkan temuan di luar scope: skill `minimal-change-policy`.
 - Secrets: ikuti skill `env-and-secrets`.
 - Lanjutan sesi lama: baca `docs/progress.md` dulu, jangan explore ulang dari nol
-  (protokolnya di `progress.md`).
+  (protokolnya di `.clinerules/progress.md`).
 
 ## Commit discipline
 
