@@ -10,7 +10,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,7 +42,10 @@ class RefreshTokenCleanupServiceTest {
         ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(refreshTokenRepository).deleteByExpiresAtBefore(cutoff.capture());
         // The cutoff must be "now" — a tolerance keeps this from racing the clock.
-        long driftSeconds = Math.abs(ChronoUnit.SECONDS.between(cutoff.getValue(), LocalDateTime.now()));
+        // LocalDateTime carries no offset, so pin it to the system zone before the
+        // duration: that makes the comparison zone-aware instead of DST-sensitive.
+        Instant cutoffInstant = cutoff.getValue().atZone(ZoneId.systemDefault()).toInstant();
+        long driftSeconds = Math.abs(ChronoUnit.SECONDS.between(cutoffInstant, Instant.now()));
         assertTrue(driftSeconds <= 5, "cutoff drifted " + driftSeconds + "s from now");
     }
 
