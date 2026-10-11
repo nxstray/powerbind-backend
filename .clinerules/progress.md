@@ -25,5 +25,5 @@ langkah berikutnya, maksimal 15 baris).
 
 - Update sebelum menyatakan satu tahap selesai, tidak ditunda sampai sesi
   berakhir.
-- Jangan pernah menaruh secret, token, atau nilai `.env` - file ini di-commit.
+- Jangan pernah menaruh secret, token, atau nilai `.env` - file ini local-only (gitignored), tapi tetap jangan taruh secret asli sebagai hygiene.
 - Jujur: klaim yang belum diverifikasi masuk `Berikutnya`, bukan `Selesai`.
