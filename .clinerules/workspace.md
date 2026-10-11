@@ -39,6 +39,30 @@ through `excludedGroups`; do not widen that list without being asked.
 - Lanjutan sesi lama: baca `docs/progress.md` dulu, jangan explore ulang dari nol
   (protokolnya di `.clinerules/progress.md`).
 
+## Pre-commit stack check
+
+The sonar CI job and the live log/metrics checks run against **this machine**,
+so before committing backend work these must be answering:
+
+| Service | Where | How to verify |
+| --- | --- | --- |
+| SonarQube | container `powerbind-sonarqube` (127.0.0.1:9000) | `GET /api/system/status` -> `UP` (startup 1-3 min) |
+| Loki | container `powerbind-loki` (127.0.0.1:3100) | `GET /ready` -> 200 |
+| Prometheus | container `powerbind-prometheus` (127.0.0.1:9090) | `GET /-/healthy` |
+| Grafana | container `powerbind-grafana` (127.0.0.1:3000) | `GET /api/health` |
+| Redis, for `mvn test` | standalone container `redis` (6379:6379) | `docker start redis` when down |
+
+Pitfalls that cost real time here:
+
+- The standalone container is named `redis`. `powerbind-redis` is the compose
+  service on **6380** and is not what the app or `mvn test` reads.
+- `docker compose up -d` exposes shifted ports (5433/6380/1884/8087); the app
+  reads the plain ones, served natively: postgres (Windows service
+  `postgresql-x64-14`, 5432), mosquitto (Windows service, 1883), and influxd
+  started by hand from an admin PowerShell (8086). No docker command starts
+  those - report it to the user instead of guessing.
+- `caddy` (80/443) is not needed for commit; its role is still unconfirmed.
+
 ## Commit discipline
 
 Satu file per commit; bulk staging diblokir hook `PreToolUse.ps1`. Stage path
