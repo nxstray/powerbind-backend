@@ -65,6 +65,203 @@ public class AgentService {
     // timezone the charts use (Asia/Jakarta, matching the frontend / weather config).
     private static final ZoneId TIME_ZONE = ZoneId.of("Asia/Jakarta");
 
+    // === Gemono scope gate: home-electricity only (deterministic, no Groq call when out-of-scope) ===
+    // Follow-up chips travel as the LAST SSE chunk: "\n__SUGGESTIONS__:[\"..\"]" — stripped by the UI.
+    public static final String SUGGESTIONS_MARKER = "__SUGGESTIONS__:";
+
+    private static final String CHAT_REFUSAL_ID =
+            "Mohon maaf, saya tidak bisa menjawab pertanyaan tersebut. Saya Gemono, asisten kelistrikan rumah. "
+            + "Tapi saya akan membantumu jika bertanya tentang kelistrikan rumahmu, misalnya tagihan, "
+            + "konsumsi daya, atau tips hemat listrik.";
+    private static final String CHAT_REFUSAL_EN =
+            "Sorry, I can't answer that question. I'm Gemono, your home electricity assistant. "
+            + "But I'll gladly help if you ask about your home electricity, such as bills, "
+            + "power usage, or saving tips.";
+    private static final String CHAT_GREETING_ID =
+            "Halo juga! Senang bertemu denganmu. Saya Gemono. "
+            + "Tapi saya akan membantumu jika bertanya tentang kelistrikan rumahmu. "
+            + "Ada yang ingin ditanyakan soal tagihan atau konsumsi listrik?";
+    private static final String CHAT_GREETING_EN =
+            "Hello! Nice to meet you. I'm Gemono. "
+            + "But I'll gladly help if you ask about your home electricity. "
+            + "Anything you'd like to ask about your bill or power usage?";
+    private static final String QUICK_ASK_REFUSAL =
+            "Mohon maaf, saya tidak bisa menjawab pertanyaan tersebut. Di sini saya hanya membantu memantau "
+            + "dan menjelaskan grafik serta metrik sistem yang tampil di halaman ini, "
+            + "misalnya arti sebuah metrik, kenapa nilainya naik atau turun, atau apakah polanya sehat.";
+
+    // Substring keywords — home electricity vocabulary (ID + EN). Short words (ac, tv, ...)
+    // live in ENERGY_SHORT_WORDS with word-boundary matching so "baca" never matches "ac".
+    private static final List<String> ENERGY_KEYWORDS = List.of(
+            "listrik", "elektrik", "electric", "kelistrikan", "watt", "kwh", "voltase", "volt", "ampere",
+            "arus listrik", "daya", "pln", "token", "tagihan", "tarif", "hemat", "boros", "irit",
+            "konsumsi daya", "konsumsi listrik", "pemakaian listrik", "penggunaan listrik", "energi",
+            "mcb", "sekring", "korslet", "konslet", "jeglek", "anjlok", "relay", "lampu", "bohlam",
+            "penerangan", "kulkas", "freezer", "kipas angin", "televisi", "charger", "setrika",
+            "rice cooker", "magic com", "dispenser", "pompa air", "water heater",
+            "mesin cuci", "mesin kopi", "oven", "microwave", "kompor listrik", "meteran",
+            "instalasi listrik", "kabel", "stopkontak", "colokan", "saklar", "grounding", "arde",
+            "stabilizer", "stavolt", "stavol", "genset", "panel surya", "tenaga surya", "plts",
+            "pemadaman", "mati lampu", "mati listrik", "byarpet", "tegangan", "kilowatt",
+            "tambah daya", "token habis", "sisa token", "isi token", "beli token", "pulsa listrik",
+            "beban listrik", "teknisi listrik", "pln mobile", "penghematan", "audit energi",
+            "kamar", "dapur", "ruang tamu", "ruang keluarga", "smart home", "otomasi",
+            "timer listrik", "pantau daya", "monitoring daya", "estimasi tagihan", "900va",
+            "1300va", "2200va", "450va", "berapa watt", "berapa kwh");
+
+    // Whole-word only: "ac" hits "nyalakan ac" but never "baca".
+    private static final List<String> ENERGY_SHORT_WORDS = List.of("ac", "tv", "va", "ups", "led");
+
+    // Identity / capability / memory questions — answered by Groq with the persona prompt.
+    private static final List<String> META_KEYWORDS = List.of(
+            "siapa kamu", "kamu siapa", "siapa aku", "gemono", "bisa apa", "kemampuan",
+            "fitur", "bantuan", "help", "ingat saya", "mengingat saya", "mengenal saya",
+            "tentang saya", "tentangku", "namamu", "nama kamu");
+
+    // Greetings / small talk — whole words; answered briefly, then steered to electricity.
+    private static final List<String> GREETING_WORDS = List.of(
+            "halo", "hallo", "hai", "hello", "hi", "hei", "hey", "pagi", "siang", "sore", "malam",
+            "selamat", "salam", "permisi", "tes", "test", "thanks", "thank", "kasih",
+            "makasih", "oke", "ok", "okay", "siap", "mantap", "kabar");
+
+    private enum ChatScope { GREETING, IN_SCOPE, OUT_OF_SCOPE }
+
+    private static boolean containsAny(String q, List<String> keywords) {
+        for (String kw : keywords) {
+            if (q.contains(kw)) return true;
+        }
+        return false;
+    }
+
+    // Whole-word match: "kasih" hits "terima kasih" but never "kekasih".
+    private static boolean containsWordAny(String q, List<String> words) {
+        String padded = " " + q.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").replaceAll("\\s+", " ") + " ";
+        for (String w : words) {
+            if (padded.contains(" " + w + " ")) return true;
+        }
+        return false;
+    }
+
+    private static boolean isGreeting(String q) {
+        return q.length() <= 40 && containsWordAny(q, GREETING_WORDS);
+    }
+
+    // English reply only for ASCII messages with English question words and no
+    // Indonesian markers — default is Indonesian (product language).
+    private static boolean looksEnglish(String q) {
+        if (!q.matches("[\\x00-\\x7F]*")) return false;
+        String padded = " " + q + " ";
+        boolean hasEn = padded.contains(" who ") || padded.contains(" what ") || padded.contains(" how ")
+                || padded.contains(" why ") || padded.contains(" is ") || padded.contains(" are ")
+                || padded.contains(" do ") || padded.contains(" does ") || padded.contains(" tell ")
+                || padded.contains(" explain ") || padded.contains(" can you ") || padded.contains(" hello ")
+                || padded.contains(" hi ") || padded.contains(" hey ");
+        boolean hasId = padded.contains(" siapa ") || padded.contains(" apa ") || padded.contains(" yang ")
+                || padded.contains(" adalah ") || padded.contains(" saya ") || padded.contains(" kamu ")
+                || padded.contains(" tolong ") || padded.contains(" jelaskan ") || padded.contains(" kenapa ")
+                || padded.contains(" bagaimana ") || padded.contains(" berapa ") || padded.contains(" halo ")
+                || padded.contains(" hai ");
+        return hasEn && !hasId;
+    }
+
+    // Follow-up turns (existing conversationId or prior history) skip the gate — the
+    // opening message already set the topic, and the hardened system prompt below
+    // refuses out-of-scope turns inside the thread.
+    private static ChatScope classifyChatMessage(String message, boolean isFollowUp) {
+        if (isFollowUp) return ChatScope.IN_SCOPE;
+        String q = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (q.isBlank()) return ChatScope.OUT_OF_SCOPE;
+        if (containsAny(q, ENERGY_KEYWORDS) || containsWordAny(q, ENERGY_SHORT_WORDS)) return ChatScope.IN_SCOPE;
+        if (containsAny(q, META_KEYWORDS)) return ChatScope.IN_SCOPE;
+        if (isGreeting(q)) return ChatScope.GREETING;
+        return ChatScope.OUT_OF_SCOPE;
+    }
+
+    private static final String QUICK_ASK_GREETING =
+            "Halo! Di sini saya membantu memantau dan menjelaskan grafik serta metrik sistem "
+            + "di halaman ini \u2014 silakan tanyakan arti sebuah metrik atau pola pada grafik yang tampil.";
+
+    // Metrics-overlay vocabulary: questions about charts, series, trends, or JVM/CPU metrics.
+    // Electricity terms are accepted too (rule 4 of the metrics persona); anything else is refused.
+    private static final List<String> METRICS_KEYWORDS = List.of(
+            "grafik", "grapik", "chart", "metrik", "metric", "metrix", "prometheus", "grafana",
+            "garis", "kurva", "legend", "sumbu", "puncak", "peak", "tren", "trend", "pola",
+            "anomali", "naik", "turun", "stabil", "lonjak", "drop", "spike", "beban", "throughput",
+            "latency", "latensi", "error rate", "memory", "memori", "heap", "cpu", "jvm",
+            "garbage", "thread", "koneksi", "pool", "uptime", "health", "sehat", "normal", "wajar",
+            "bocor", "leak", "overload", "oome", "artinya", "maksudnya", "menjelaskan", "jelaskan",
+            "kenapa", "mengapa", "kapan", "berapa nilainya", "satuan", "mib", "gib", "kib",
+            "persen", "persentase", "biru", "hijau", "kuning", "merah", "oranye", "ungu", "pink",
+            "warna", "mil", "bil", "juta", "ribu", "miliar", "jam terakhir", "24 jam", "6 jam",
+            "halaman ini", "sistem", "aplikasi", "powerbind", "backend", "actuator");
+
+    private static ChatScope classifyQuickAsk(String message) {
+        String q = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (q.isBlank()) return ChatScope.OUT_OF_SCOPE;
+        if (containsAny(q, METRICS_KEYWORDS)) return ChatScope.IN_SCOPE;
+        if (containsAny(q, ENERGY_KEYWORDS) || containsWordAny(q, ENERGY_SHORT_WORDS)) return ChatScope.IN_SCOPE;
+        if (isGreeting(q)) return ChatScope.GREETING;
+        // Mentioning a real Prometheus metric/series name is in-scope even without keywords
+        // (e.g. "G1 Eden Space"). Checked by the caller via requestedMetrics; this static
+        // pass only covers the keyword vocabulary.
+        return ChatScope.OUT_OF_SCOPE;
+    }
+
+    private static String jsonEscape(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    // Last SSE chunk: newline + marker + JSON array. Frontend strips it and renders bubbles.
+    private static String buildSuggestionsTrailer(List<String> suggestions) {
+        StringBuilder sb = new StringBuilder("\n").append(SUGGESTIONS_MARKER).append("[");
+        for (int i = 0; i < suggestions.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append("\"").append(jsonEscape(suggestions.get(i))).append("\"");
+        }
+        return sb.append("]").toString();
+    }
+
+    // Context-aware follow-up chips (max 3), no storage.
+    private static List<String> suggestFollowUps(String question, boolean wasteDetected) {
+        String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+        List<String> out = new ArrayList<>();
+        if (wasteDetected) {
+            out.add("Matikan perangkat di ruangan kosong?");
+            out.add("Tips hemat AC?");
+        }
+        if (q.contains("tagihan") || q.contains("tarif") || q.contains("token") || q.contains("pln")
+                || q.contains("biaya") || q.contains("bayar")) {
+            if (out.size() < 3) out.add("Estimasi tagihan bulan ini?");
+            if (out.size() < 3) out.add("Tips hemat kulkas?");
+        }
+        if (q.contains("ac")) {
+            if (out.size() < 3) out.add("Suhu AC ideal biar hemat?");
+        }
+        if (q.contains("lampu") || q.contains("penerangan")) {
+            if (out.size() < 3) out.add("Ganti ke lampu LED?");
+        }
+        if (out.size() < 3) out.add("Tips hemat listrik?");
+        if (out.size() < 3) out.add("Cek konsumsi hari ini?");
+        return out.size() > 3 ? out.subList(0, 3) : out;
+    }
+
+    private static List<String> suggestMetricsFollowUps(String question) {
+        String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+        List<String> out = new ArrayList<>();
+        if (q.contains("memory") || q.contains("memori") || q.contains("heap") || q.contains("jvm")) {
+            out.add("Apakah pola memory sehat?");
+            out.add("Kapan puncak memory terjadi?");
+        } else if (q.contains("cpu")) {
+            out.add("Kenapa CPU naik?");
+            out.add("Apakah CPU masih wajar?");
+        } else {
+            out.add("Jelaskan metrik ini?");
+            out.add("Apakah polanya sehat?");
+        }
+        if (out.size() < 3) out.add("Bandingkan dengan 6 jam terakhir?");
+        return out.size() > 3 ? out.subList(0, 3) : out;
+    }
+
     // Stream text chat with live energy context — persists into a conversation thread
     // and triggers background extraction of any durable facts worth remembering
     public Flux<String> chat(String username, AgentRequest.Chat request) {
@@ -75,6 +272,21 @@ public class AgentService {
 
         chatMessageRepository.save(ChatMessage.builder()
                 .user(user).conversation(conversation).role("user").content(request.getMessage()).build());
+
+        boolean isFollowUp = request.getConversationId() != null && !request.getConversationId().isBlank();
+        ChatScope scope = classifyChatMessage(request.getMessage(), isFollowUp);
+        if (scope != ChatScope.IN_SCOPE) {
+            // Deterministic short-circuit: refusal/greeting ships straight away, Groq is
+            // never called and refusal text never pollutes long-term memory.
+            boolean english = looksEnglish(request.getMessage().toLowerCase(Locale.ROOT));
+            String canned = scope == ChatScope.GREETING
+                    ? (english ? CHAT_GREETING_EN : CHAT_GREETING_ID)
+                    : (english ? CHAT_REFUSAL_EN : CHAT_REFUSAL_ID);
+            chatMessageRepository.save(ChatMessage.builder()
+                    .user(user).conversation(conversation).role("assistant").content(canned).build());
+            return Flux.just(canned,
+                    buildSuggestionsTrailer(suggestFollowUps(request.getMessage(), false)));
+        }
 
         String systemPrompt = buildSystemPrompt(user);
         List<Map<String, Object>> messages = buildMessages(systemPrompt, request);
@@ -104,59 +316,69 @@ public class AgentService {
             1. Jawab pertanyaan tentang grafik/metrik di halaman System Metrics: arti
                metriknya, kenapa nilainya naik/turun, dan apa yang wajar untuk
                aplikasi Java Spring Boot.
-            2. Kalau ada pola yang tidak sehat (memory terus naik tanpa turun —
+            2. Kalau ada pola yang tidak sehat (memory terus naik tanpa turun,
                indikasi memory leak, atau CPU tinggi terus-menerus), sebutkan
                kemungkinan penyebab dan cara mengeceknya.
-            3. Jangan menolak pertanyaan dengan alasan di luar topik listrik — untuk
+            3. Jangan menolak pertanyaan dengan alasan di luar topik listrik, untuk
                endpoint ini kamu memang fokus ke metrik sistem.
             4. Kalau pengguna bertanya soal listrik/energi rumah, tetap bantu seperti
-               biasa — tapi prioritas utamamu menjelaskan metrik sistem.
+               biasa, tapi prioritas utamamu menjelaskan metrik sistem.
 
             Data aktual:
             5. Bila pesan pengguna menyertakan blok [DATA GRAFIK AKTUAL], itu adalah
                data Prometheus NYATA dari grafik yang sedang dilihat admin. Gunakan
-               angka-angka itu dalam jawabanmu — jangan menebak atau mengarang nilai.
+               angka-angka itu dalam jawabanmu, jangan menebak atau mengarang nilai.
             6. Saat menjelaskan dari data aktual, sebutkan secara eksplisit: kapan
                puncak (peak) terjadi (jam berapa dan berapa nilainya), bagaimana
                tren grafik (naik/turun/stabil) dan apa artinya secara operasional
                (misal grafik terus naik = beban bertambah atau indikasi masalah).
-            7. Jelaskan dengan bahasa awam yang mudah dipahami — hindari jargon
+            7. Jelaskan dengan bahasa awam yang mudah dipahami, hindari jargon
                teknis tanpa penjelasan, dan akui bila data aktual tidak tersedia.
 
             Bahasa visual grafik (WAJIB dipakai saat menafsirkan pertanyaan admin):
             8. Semua pertanyaan admin diasumsikan tentang grafik yang sedang tampil
                di halaman System Metrics. Tafsirkan istilah dalam konteks grafik
-               dulu — JANGAN menjawab sebagai pertanyaan umum di luar konteks.
+               dulu, JANGAN menjawab sebagai pertanyaan umum di luar konteks.
                Contoh: "25 mil" berarti label 25 juta pada sumbu Y grafik (bukan
                satuan jarak); "garis biru" berarti seri yang ditampilkan berwarna
                biru pada grafik.
             9. Label sumbu Y memakai gaya Grafana: "K" = ribu, "Mil" = juta
                (million), "Bil" = miliar. Untuk metrik bytes sumbu Y memakai
                satuan biner: Ki (kibibyte), Mi (mebibyte), Gi (gibibyte).
-            10. Warna garis pada grafik HANYA pembeda antar-seri (legend) — warna
+            10. Warna garis pada grafik HANYA pembeda antar-seri (legend), warna
                 TIDAK membawa arti threshold/level bahaya. Warna berbeda di antara
                 dua grafik juga bukan sesuatu yang bermakna. Jangan mengarang
                 makna warna.
-            11. Jawab pertanyaan yang diajukan — jangan beralih ke topik lain yang
+            11. Jawab pertanyaan yang diajukan, jangan beralih ke topik lain yang
                 tidak ditanyakan.
-            12. Blok [DATA GRAFIK AKTUAL] bisa berisi LEBIH DARI SATU metrik (metrik
+            12. SCOPE (STRICT): di sini kamu HANYA membantu memantau dan menjelaskan
+                grafik serta metrik sistem yang tampil di halaman ini. Untuk
+                pertanyaan apa pun di luar itu (politik, tokoh publik, pengetahuan
+                umum, coding, PR sekolah, hal lain yang tidak terkait grafik/metrik),
+                tolak dengan TEPAT kalimat ini dan tidak yang lain:
+                "Mohon maaf, saya tidak bisa menjawab pertanyaan tersebut. Di sini saya
+                hanya membantu memantau dan menjelaskan grafik serta metrik sistem yang
+                tampil di halaman ini, misalnya arti sebuah metrik, kenapa nilainya
+                naik atau turun, atau apakah polanya sehat." Jangan menebak, jangan
+                menjawab sebagian pertanyaan di luar scope.
+            13. Blok [DATA GRAFIK AKTUAL] bisa berisi LEBIH DARI SATU metrik (metrik
                 yang disebut di pertanyaan admin + metrik yang sedang tampil di
                 grafik). Jawablah PERTANYAAN yang ditanya: kalau admin menanyakan
-                metrik tertentu, fokuskan jawaban pada data metrik itu — jangan
+                metrik tertentu, fokuskan jawaban pada data metrik itu, jangan
                 bercerita tentang metrik lain yang kebetulan ikut tersedia. Metrik
                 disebutkan eksplisit di setiap blok "Metrik: <nama>".
-            13. Pertanyaan admin bisa menyebut NAMA SERI, bukan nama metrik — misal
+            14. Pertanyaan admin bisa menyebut NAMA SERI, bukan nama metrik, misal
                 "G1 Eden Space", "Metaspace", atau "CodeCache" adalah seri di dalam
                 metrik jvm_memory_used_bytes. Periksa nama-nama seri pada blok data:
                 kalau pertanyaan menyebut nama seri yang ada di salah satu metrik,
-                jawablah PAKAI data seri itu (jam puncak, nilai, tren) — jangan
+                jawablah PAKAI data seri itu (jam puncak, nilai, tren), jangan
                 mengatakan data tidak ada kalau seri tersebut tersedia.
-            14. Gunakan satuan yang konsisten dengan yang tampil di grafik: angka
+            15. Gunakan satuan yang konsisten dengan yang tampil di grafik: angka
                 memori sebut dalam MiB/GiB (sesuai label chart), persentase CPU
                 dalam %, dan bila mengutip label sumbu Y (K/Mil/Bil) jelaskan
                 artinya (ribu/juta/miliar).
 
-            Format jawaban: 3-4 kalimat saja — padat tapi detail, menjelaskan arti
+            Format jawaban: 3-4 kalimat saja, padat tapi detail, menjelaskan arti
             metriknya dan kesimpulan yang bisa diambil dari pola nilainya, tanpa
             basa-basi pembuka, tanpa heading markdown.
             """;
@@ -169,6 +391,22 @@ public class AgentService {
         // the metrics quick-ask persona has no per-user context).
         userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
+
+        // Deterministic scope gate FIRST: anything outside charts/metrics/system topics
+        // is refused without touching Prometheus or Groq (ephemeral — nothing persisted).
+        // Greetings are answered briefly and steered back to the graphs.
+        ChatScope quickScope = classifyQuickAsk(request.getMessage());
+        if (quickScope == ChatScope.GREETING) {
+            return Flux.just(QUICK_ASK_GREETING,
+                    buildSuggestionsTrailer(suggestMetricsFollowUps(request.getMessage())));
+        }
+        if (quickScope == ChatScope.OUT_OF_SCOPE
+                && requestedMetrics(request.getMetrics(), request.getMessage()).isEmpty()
+                && !mentionsKnownMetric(request.getMessage())) {
+            log.info("[Agent] Quick-ask refused (out-of-scope) from {}: {}", username, request.getMessage());
+            return Flux.just(QUICK_ASK_REFUSAL,
+                    buildSuggestionsTrailer(suggestMetricsFollowUps(request.getMessage())));
+        }
 
         // Optional live context: only fetched when the frontend tells us which chart
         // it is showing. A failed/unavailable Prometheus query degrades gracefully —
@@ -220,7 +458,7 @@ public class AgentService {
         long rangeStart = now - safeHours * 3600_000L;
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[DATA GRAFIK AKTUAL — jangan menebak, gunakan angka ini]\n");
+        sb.append("[DATA GRAFIK AKTUAL: jangan menebak, gunakan angka ini]\n");
         sb.append("Rentang: ").append(safeHours).append(" jam terakhir (")
           .append(timeFmt.format(Instant.ofEpochMilli(rangeStart))).append(" s/d ")
           .append(timeFmt.format(Instant.ofEpochMilli(now))).append(")\n");
@@ -275,6 +513,22 @@ public class AgentService {
     // (space tolerant: "jvm memory used bytes" hits jvm_memory_used_bytes).
     // Lookup failures are non-fatal — quick-ask still answers, just without the
     // extra chart context.
+    // True when the question literally mentions a known Prometheus metric or series
+    // name (space-tolerant) — e.g. "G1 Eden Space", "jvm memory used bytes".
+    // Lookup failures are treated as unknown (caller degrades gracefully).
+    private boolean mentionsKnownMetric(String question) {
+        try {
+            String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+            String qUnderscored = q.replaceAll("[\\s-]+", "_");
+            for (String name : prometheusService.getMetricNames()) {
+                if (name != null && mentionsMetric(q, qUnderscored, name)) return true;
+            }
+        } catch (Exception e) {
+            log.warn("[Agent] Quick-ask gate metric lookup failed: {}", e.getMessage());
+        }
+        return false;
+    }
+
     private void addMentionedMetrics(LinkedHashSet<String> wanted, String question) {
         try {
             String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
@@ -439,6 +693,20 @@ public class AgentService {
 
     // Stream vision chat — analyze image + energy context (not persisted into a conversation thread)
     public Flux<String> visionChat(String prompt, MultipartFile imageFile) {
+        // Scope gate on the TEXT only — the photo itself is assumed to be home context.
+        boolean promptFollowUp = false;
+        ChatScope visionScope = classifyChatMessage(prompt, promptFollowUp);
+        if (visionScope == ChatScope.GREETING) {
+            boolean english = prompt != null && looksEnglish(prompt.toLowerCase(Locale.ROOT));
+            return Flux.just(english ? CHAT_GREETING_EN : CHAT_GREETING_ID,
+                    buildSuggestionsTrailer(suggestFollowUps(prompt, false)));
+        }
+        if (visionScope == ChatScope.OUT_OF_SCOPE) {
+            log.info("[Agent] Vision refused (out-of-scope prompt)");
+            boolean english = prompt != null && looksEnglish(prompt.toLowerCase(Locale.ROOT));
+            return Flux.just(english ? CHAT_REFUSAL_EN : CHAT_REFUSAL_ID,
+                    buildSuggestionsTrailer(suggestFollowUps(prompt, false)));
+        }
         try {
             byte[] bytes = imageFile.getBytes();
             String base64 = Base64.getEncoder().encodeToString(bytes);
@@ -469,6 +737,21 @@ public class AgentService {
 
         chatMessageRepository.save(ChatMessage.builder()
                 .user(user).conversation(conversation).role("user").content(userMessage).build());
+
+        // Scope gate on the QUESTION (the document itself may be anything, e.g. a bill
+        // scan). Refusals are persisted for history consistency; memory is skipped.
+        boolean docFollowUp = conversationId != null && !conversationId.isBlank();
+        ChatScope docScope = classifyChatMessage(userMessage, docFollowUp);
+        if (docScope != ChatScope.IN_SCOPE) {
+            boolean english = userMessage != null && looksEnglish(userMessage.toLowerCase(Locale.ROOT));
+            String canned = docScope == ChatScope.GREETING
+                    ? (english ? CHAT_GREETING_EN : CHAT_GREETING_ID)
+                    : (english ? CHAT_REFUSAL_EN : CHAT_REFUSAL_ID);
+            chatMessageRepository.save(ChatMessage.builder()
+                    .user(user).conversation(conversation).role("assistant").content(canned).build());
+            return Flux.just(canned,
+                    buildSuggestionsTrailer(suggestFollowUps(userMessage, false)));
+        }
 
         String systemPrompt = buildSystemPrompt(user);
         systemPrompt += "\n\n=== UPLOADED DOCUMENT: " + documentFile.getOriginalFilename() + " ===\n";
@@ -578,7 +861,7 @@ public class AgentService {
             sb.append("    Relay: ").append(room.isRelayOn() ? "ON" : "OFF").append("\n");
             // Flag waste anomaly — relay on but no presence
             if (room.isRelayOn() && !room.isPresenceDetected()) {
-                sb.append("    ⚠ WARNING: Device ON but room is EMPTY — potential energy waste!\n");
+                sb.append("    ⚠ WARNING: Device ON but room is EMPTY, potential energy waste!\n");
             }
         }
 
@@ -587,11 +870,20 @@ public class AgentService {
         sb.append("- A typical Indonesian household uses 200-500 kWh/month\n");
         sb.append("- Suggest specific actions when anomalies are detected\n");
         sb.append("- Always give cost in Rupiah referencing PLN tariff\n");
+        sb.append("- SCOPE (STRICT): you ONLY answer questions about home electricity, ");
+        sb.append("power/energy usage, household appliances, and your own capabilities as Gemono. ");
+        sb.append("For ANY other topic (politics, public figures, history, celebrities, sports, ");
+        sb.append("general knowledge, coding, homework, anything unrelated to home electricity), ");
+        sb.append("refuse with EXACTLY this sentence and nothing else: \"");
+        sb.append(CHAT_REFUSAL_ID);
+        sb.append("\" (or the English variant when the user writes in English: \"");
+        sb.append(CHAT_REFUSAL_EN);
+        sb.append("\"). Never guess, never answer out-of-scope questions partially.\n");
         sb.append("- If the user asks whether you remember them or past conversations: you do NOT keep a\n");
         sb.append("  transcript of old messages, but you may have a few remembered facts about them below.\n");
         sb.append("  If that section is non-empty, say naturally that you remember a few things about them\n");
         sb.append("  (referencing one or two, not a raw dump). If it's empty, say you don't have anything\n");
-        sb.append("  specific saved about them yet — don't give a flat, scripted denial either way.\n");
+        sb.append("  specific saved about them yet, don't give a flat, scripted denial either way.\n");
 
         if (user != null) {
             sb.append(memoryService.buildMemoryPromptBlock(user));
