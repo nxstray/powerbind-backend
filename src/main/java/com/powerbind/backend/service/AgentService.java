@@ -45,6 +45,7 @@ public class AgentService {
     private static final String KEY_CONTENT = "content";
     private static final String VALUE_SYSTEM = "system";
     private static final String VALUE_USER = "user";
+    private static final String VALUE_ASSISTANT = "assistant";
 
     private final GroqService groqService;
     private final InfluxDBService influxDBService;
@@ -229,20 +230,30 @@ public class AgentService {
             out.add("Matikan perangkat di ruangan kosong?");
             out.add("Tips hemat AC?");
         }
-        if (q.contains("tagihan") || q.contains("tarif") || q.contains("token") || q.contains("pln")
-                || q.contains("biaya") || q.contains("bayar")) {
-            if (out.size() < 3) out.add("Estimasi tagihan bulan ini?");
-            if (out.size() < 3) out.add("Tips hemat kulkas?");
+        if (hasBillingKeyword(q)) {
+            addIfRoom(out, "Estimasi tagihan bulan ini?");
+            addIfRoom(out, "Tips hemat kulkas?");
         }
         if (q.contains("ac")) {
-            if (out.size() < 3) out.add("Suhu AC ideal biar hemat?");
+            addIfRoom(out, "Suhu AC ideal biar hemat?");
         }
         if (q.contains("lampu") || q.contains("penerangan")) {
-            if (out.size() < 3) out.add("Ganti ke lampu LED?");
+            addIfRoom(out, "Ganti ke lampu LED?");
         }
-        if (out.size() < 3) out.add("Tips hemat listrik?");
-        if (out.size() < 3) out.add("Cek konsumsi hari ini?");
+        addIfRoom(out, "Tips hemat listrik?");
+        addIfRoom(out, "Cek konsumsi hari ini?");
         return out.size() > 3 ? out.subList(0, 3) : out;
+    }
+
+    // Caps a follow-up chip at the max-3 budget from one place, and keeps the
+    // enclosing method well under the cognitive-complexity limit (java:S3776).
+    private static void addIfRoom(List<String> out, String chip) {
+        if (out.size() < 3) out.add(chip);
+    }
+
+    private static boolean hasBillingKeyword(String q) {
+        return q.contains("tagihan") || q.contains("tarif") || q.contains("token") || q.contains("pln")
+                || q.contains("biaya") || q.contains("bayar");
     }
 
     private static List<String> suggestMetricsFollowUps(String question) {
@@ -262,6 +273,14 @@ public class AgentService {
         return out.size() > 3 ? out.subList(0, 3) : out;
     }
 
+    // Scope-gate answer: greeting vs refusal copy in the caller's language.
+    private static String cannedReply(ChatScope scope, boolean english) {
+        if (scope == ChatScope.GREETING) {
+            return english ? CHAT_GREETING_EN : CHAT_GREETING_ID;
+        }
+        return english ? CHAT_REFUSAL_EN : CHAT_REFUSAL_ID;
+    }
+
     // Stream text chat with live energy context — persists into a conversation thread
     // and triggers background extraction of any durable facts worth remembering
     public Flux<String> chat(String username, AgentRequest.Chat request) {
@@ -279,11 +298,9 @@ public class AgentService {
             // Deterministic short-circuit: refusal/greeting ships straight away, Groq is
             // never called and refusal text never pollutes long-term memory.
             boolean english = looksEnglish(request.getMessage().toLowerCase(Locale.ROOT));
-            String canned = scope == ChatScope.GREETING
-                    ? (english ? CHAT_GREETING_EN : CHAT_GREETING_ID)
-                    : (english ? CHAT_REFUSAL_EN : CHAT_REFUSAL_ID);
+            String canned = cannedReply(scope, english);
             chatMessageRepository.save(ChatMessage.builder()
-                    .user(user).conversation(conversation).role("assistant").content(canned).build());
+                    .user(user).conversation(conversation).role(VALUE_ASSISTANT).content(canned).build());
             return Flux.just(canned,
                     buildSuggestionsTrailer(suggestFollowUps(request.getMessage(), false)));
         }
@@ -297,7 +314,7 @@ public class AgentService {
                 .doOnNext(fullReply::append)
                 .doOnComplete(() -> {
                     chatMessageRepository.save(ChatMessage.builder()
-                            .user(user).conversation(conversation).role("assistant").content(fullReply.toString()).build());
+                            .user(user).conversation(conversation).role(VALUE_ASSISTANT).content(fullReply.toString()).build());
                     // touch the conversation so updatedAt bumps and it re-sorts to the top of the dropdown
                     conversationRepository.save(conversation);
                     extractMemoriesInBackground(user);
@@ -744,11 +761,9 @@ public class AgentService {
         ChatScope docScope = classifyChatMessage(userMessage, docFollowUp);
         if (docScope != ChatScope.IN_SCOPE) {
             boolean english = userMessage != null && looksEnglish(userMessage.toLowerCase(Locale.ROOT));
-            String canned = docScope == ChatScope.GREETING
-                    ? (english ? CHAT_GREETING_EN : CHAT_GREETING_ID)
-                    : (english ? CHAT_REFUSAL_EN : CHAT_REFUSAL_ID);
+            String canned = cannedReply(docScope, english);
             chatMessageRepository.save(ChatMessage.builder()
-                    .user(user).conversation(conversation).role("assistant").content(canned).build());
+                    .user(user).conversation(conversation).role(VALUE_ASSISTANT).content(canned).build());
             return Flux.just(canned,
                     buildSuggestionsTrailer(suggestFollowUps(userMessage, false)));
         }
@@ -770,7 +785,7 @@ public class AgentService {
                 .doOnNext(fullReply::append)
                 .doOnComplete(() -> {
                     chatMessageRepository.save(ChatMessage.builder()
-                            .user(user).conversation(conversation).role("assistant").content(fullReply.toString()).build());
+                            .user(user).conversation(conversation).role(VALUE_ASSISTANT).content(fullReply.toString()).build());
                     conversationRepository.save(conversation);
                     extractMemoriesInBackground(user);
                 })
