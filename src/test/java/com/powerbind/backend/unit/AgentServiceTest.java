@@ -73,14 +73,15 @@ class AgentServiceTest {
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
         when(groqService.streamChat(anyList())).thenReturn(Flux.just("Hi ", "Alice"));
 
-        Conversation created = Conversation.builder().id(UUID.randomUUID()).user(alice).title("Halo").build();
+        Conversation created = Conversation.builder().id(UUID.randomUUID()).user(alice).title("Listrik").build();
         // resolveConversation persists a new Conversation when no conversationId is supplied,
         // and touches it again after the assistant reply completes
         when(conversationRepository.save(any(Conversation.class))).thenReturn(created);
 
         AgentRequest.Chat request = new AgentRequest.Chat();
-        request.setMessage("Halo");
+        request.setMessage("Kenapa tagihan listrik naik?");
 
+        // Normal in-scope stream: Groq chunks only, no suggestions trailer (chips are OOS/greeting only).
         StepVerifier.create(agentService.chat("alice", request))
                 .expectNext("Hi ", "Alice")
                 .verifyComplete();
@@ -90,7 +91,7 @@ class AgentServiceTest {
 
         List<ChatMessage> saved = captor.getAllValues();
         assertEquals("user", saved.get(0).getRole());
-        assertEquals("Halo", saved.get(0).getContent());
+        assertEquals("Kenapa tagihan listrik naik?", saved.get(0).getContent());
         assertEquals(alice, saved.get(0).getUser());
 
         assertEquals("assistant", saved.get(1).getRole());
@@ -115,6 +116,7 @@ class AgentServiceTest {
         request.setMessage("Lanjutkan");
         request.setConversationId(conversationId.toString());
 
+        // Normal in-scope stream: Groq chunks only, no suggestions trailer.
         StepVerifier.create(agentService.chat("alice", request))
                 .expectNext("Ok")
                 .verifyComplete();
@@ -232,7 +234,10 @@ class AgentServiceTest {
 
         AgentRequest.QuickAsk request = quickAsk("jelaskan memory", List.of("jvm_memory_used_bytes"), 1);
 
-        StepVerifier.create(agentService.quickAsk("alice", request)).expectNext("ok").verifyComplete();
+        // Answered from live numbers, no suggestions trailer on the in-scope path.
+        StepVerifier.create(agentService.quickAsk("alice", request))
+                .expectNext("ok")
+                .verifyComplete();
 
         String userMessage = String.valueOf(captureStreamChatMessages().get(1).get("content"));
         assertTrue(userMessage.startsWith("jelaskan memory"));
@@ -268,7 +273,9 @@ class AgentServiceTest {
         AgentRequest.QuickAsk request =
                 quickAsk("jelaskan jvm memory used bytes", List.of("process_cpu_usage"), 1);
 
-        StepVerifier.create(agentService.quickAsk("alice", request)).expectNext("ok").verifyComplete();
+        StepVerifier.create(agentService.quickAsk("alice", request))
+                .expectNext("ok")
+                .verifyComplete();
 
         String userMessage = String.valueOf(captureStreamChatMessages().get(1).get("content"));
         assertTrue(userMessage.contains("Metrik: jvm_memory_used_bytes"));
@@ -294,5 +301,76 @@ class AgentServiceTest {
         String userMessage = String.valueOf(captureStreamChatMessages().get(1).get("content"));
         assertEquals("jelaskan memory", userMessage);
         assertFalse(userMessage.contains("[DATA GRAFIK AKTUAL"));
+    }
+
+    @Test
+    @DisplayName("TC-UNIT-AGENT-11 out-of-scope chat is refused without calling Groq, with chips")
+    void chat_shouldRefuse_whenOutOfScope() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        Conversation created = Conversation.builder().id(UUID.randomUUID()).user(alice).title("siapa itu").build();
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(created);
+
+        AgentRequest.Chat request = new AgentRequest.Chat();
+        request.setMessage("siapa itu prabowo");
+
+        StepVerifier.create(agentService.chat("alice", request))
+                .expectNextMatches(refusal -> refusal.contains("Mohon maaf, saya tidak bisa menjawab"))
+                .expectNextMatches(trailer -> trailer.contains(AgentService.SUGGESTIONS_MARKER))
+                .verifyComplete();
+
+        verifyNoInteractions(groqService);
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageRepository, times(2)).save(captor.capture());
+        assertEquals("assistant", captor.getAllValues().get(1).getRole());
+        assertFalse(captor.getAllValues().get(1).getContent().contains(AgentService.SUGGESTIONS_MARKER));
+    }
+
+    @Test
+    @DisplayName("TC-UNIT-AGENT-12 greeting is answered briefly and steered to electricity")
+    void chat_shouldGreet_whenSmallTalk() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        Conversation created = Conversation.builder().id(UUID.randomUUID()).user(alice).title("halo").build();
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(created);
+
+        AgentRequest.Chat request = new AgentRequest.Chat();
+        request.setMessage("halo");
+
+        StepVerifier.create(agentService.chat("alice", request))
+                .expectNextMatches(greeting -> greeting.contains("kelistrikan rumahmu"))
+                .expectNextMatches(trailer -> trailer.contains(AgentService.SUGGESTIONS_MARKER))
+                .verifyComplete();
+
+        verifyNoInteractions(groqService);
+    }
+
+    @Test
+    @DisplayName("TC-UNIT-AGENT-13 out-of-scope quick-ask is refused without touching Prometheus/Groq")
+    void quickAsk_shouldRefuse_whenOutOfScope() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(prometheusService.getMetricNames()).thenReturn(List.of("jvm_memory_used_bytes"));
+
+        AgentRequest.QuickAsk request = quickAsk("siapa itu prabowo", null, null);
+
+        StepVerifier.create(agentService.quickAsk("alice", request))
+                .expectNextMatches(refusal -> refusal.contains("hanya membantu memantau"))
+                .expectNextMatches(trailer -> trailer.contains(AgentService.SUGGESTIONS_MARKER))
+                .verifyComplete();
+
+        verifyNoInteractions(groqService);
+        verify(prometheusService, never()).queryRange(any(), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("TC-UNIT-AGENT-14 greeting in quick-ask is steered back to the graphs")
+    void quickAsk_shouldGreet_whenSmallTalk() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+
+        StepVerifier.create(agentService.quickAsk("alice", quickAsk("halo", null, null)))
+                .expectNextMatches(greeting -> greeting.contains("grafik serta metrik"))
+                .expectNextMatches(trailer -> trailer.contains(AgentService.SUGGESTIONS_MARKER))
+                .verifyComplete();
+
+        verifyNoInteractions(groqService);
+        verifyNoInteractions(prometheusService);
     }
 }
