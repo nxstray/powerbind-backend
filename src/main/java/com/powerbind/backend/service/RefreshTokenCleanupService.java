@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * Rotasi refresh token di {@link AuthService} hanya menandai token lama sebagai
@@ -30,7 +31,7 @@ public class RefreshTokenCleanupService {
     @Scheduled(cron = "0 30 3 * * *")
     @Transactional
     public long cleanupExpiredTokens() {
-        long deleted = refreshTokenRepository.deleteByExpiresAtBefore(LocalDateTime.now());
+        long deleted = refreshTokenRepository.deleteByExpiresAtBefore(LocalDateTime.now(ZoneId.systemDefault()));
         if (deleted > 0) {
             log.info("[TokenCleanup] {} refresh token kedaluwarsa dihapus", deleted);
         }
