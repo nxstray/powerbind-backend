@@ -89,7 +89,8 @@ class RoomServiceTest {
     void getRoomById_shouldThrow_whenRoomNotFound() {
         when(roomRepository.findById(room.getId())).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> roomService.getRoomById(room.getId()));
+        UUID roomId = room.getId();
+        assertThrows(ResourceNotFoundException.class, () -> roomService.getRoomById(roomId));
     }
 
     @Test
