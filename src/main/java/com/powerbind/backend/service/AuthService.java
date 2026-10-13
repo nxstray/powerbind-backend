@@ -52,7 +52,7 @@ public class AuthService {
 
         // Check if account is currently locked
         if (user.getLockedUntil() != null && LocalDateTime.now().isBefore(user.getLockedUntil())) {
-            long minutesLeft = Duration.between(ZonedDateTime.now(), user.getLockedUntil().atZone(ZoneId.systemDefault())).toMinutes() + 1;
+            long minutesLeft = Duration.between(ZonedDateTime.now(ZoneId.systemDefault()), user.getLockedUntil().atZone(ZoneId.systemDefault())).toMinutes() + 1;
             throw new AccountLockedException(
                 "Account locked due to too many failed attempts. Try again in " + minutesLeft + " minutes."
             );
