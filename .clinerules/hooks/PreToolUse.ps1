@@ -2,7 +2,8 @@
 #
 # Enforces one commit per file: blocks `git commit -a`, `-am`, `--all`,
 # `git commit .`, `git add -A/--all/.`, and any `git commit` while more than one
-# file is staged.
+# file is staged. It also refuses to stage or commit `docs/progress.md`, which
+# .gitignore keeps as a local-only session handoff (never push).
 #
 # Only shell commands that actually invoke git are inspected; every other tool
 # call is allowed straight through. A failure falls open (allow) so a broken
@@ -61,6 +62,30 @@ function Get-GitGuardDecision {
     $addTail = $null
     if ($Command -match $gitCommitPattern) { $commitTail = $Matches[1] }
     if ($Command -match $gitAddPattern) { $addTail = $Matches[1] }
+
+    # -- docs/progress.md stays local-only ------------------------------------
+    # Runs regardless of CLINE_HOOKS_ENFORCE_PER_FILE: .gitignore labels the
+    # file "Session handoff (local-only, never push)", so it must never reach
+    # the index or history - not even through `git add -f` or a pathspec commit.
+    $reason = ''
+    $progressPathPattern = '(?i)docs[/\\]progress\.md'
+    if ($null -ne $addTail -and $addTail -match $progressPathPattern) {
+        $reason = 'docs/progress.md adalah file handoff lokal (gitignored) dan tidak boleh di-stage - `git add -f` pun dilarang.'
+    }
+    if ($reason -eq '' -and $null -ne $commitTail -and $commitTail -match $progressPathPattern) {
+        $reason = 'docs/progress.md adalah file handoff lokal (gitignored) dan tidak boleh masuk commit.'
+    }
+    if ($reason -eq '' -and $null -ne $commitTail) {
+        $stagedProgress = @(Get-StagedFiles $workspacePath | Where-Object { $_ -match '(?i)(^|[/\\])docs[/\\]progress\.md$' })
+        if ($stagedProgress.Count -gt 0) {
+            $reason = 'docs/progress.md terdeteksi di staging area - unstage dulu (git restore --staged docs/progress.md).'
+        }
+    }
+    if ($reason -ne '') {
+        $decision.Cancel = $true
+        $decision.ErrorMessage = '[PROGRESS.MD LOCAL] Diblokir: {0} Cukup edit filenya di disk; ia sengaja di-gitignore (.gitignore: "Session handoff (local-only, never push)").' -f $reason
+        return $decision
+    }
 
     # -- one commit per file --------------------------------------------------
     if (-not $Config.EnforcePerFile) { return $decision }
