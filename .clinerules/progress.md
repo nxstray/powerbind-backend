@@ -11,8 +11,8 @@ langkah berikutnya, maksimal 15 baris).
 
 ## Format `docs/progress.md`
 
-- Maksimal 15 baris, ditulis ulang (overwrite), bukan append - git history
-  sudah menjadi log-nya.
+- Maksimal 15 baris, ditulis ulang (overwrite), bukan append - file ini
+  local-only (gitignored, tanpa git history), jadi jangan biarkan membesar.
 - Tiga bidang, urutan tetap:
   - `Selesai:` apa yang sudah dikerjakan **dan sudah diverifikasi**
   - `File diubah:` path yang tersentuh pada tahap ini
@@ -27,3 +27,6 @@ langkah berikutnya, maksimal 15 baris).
   berakhir.
 - Jangan pernah menaruh secret, token, atau nilai `.env` - file ini local-only (gitignored), tapi tetap jangan taruh secret asli sebagai hygiene.
 - Jujur: klaim yang belum diverifikasi masuk `Berikutnya`, bukan `Selesai`.
+- `docs/progress.md` masuk `.gitignore` (label "Session handoff (local-only,
+  never push)"): edit di disk saja, jangan pernah `git add`/commit - hook
+  `PreToolUse.ps1` memblokir percobaannya, termasuk `git add -f`.
