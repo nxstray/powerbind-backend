@@ -14,7 +14,7 @@ every task Cline runs inside this repository.
 | File | Kind | Purpose |
 | --- | --- | --- |
 | `PostToolUse.ps1` | hook | Logs every completed tool call, trims it to a fixed length, and nudges Cline when the session's token budget is crossed. |
-| `PreToolUse.ps1` | hook | Blocks bulk commits that would lump several files together. |
+| `PreToolUse.ps1` | hook | Blocks bulk commits that would lump several files together, and blocks staging/committing the local-only `docs/progress.md`. |
 | `_lib.ps1` | helper | Shared helpers. Its name matches no hook type, so Cline never runs it directly. |
 | `.gitignore` | support | Keeps the generated `logs/` folder out of git. |
 
@@ -37,6 +37,7 @@ an extensionless `PreToolUse`. Names for the wrong platform are ignored.
 | Token thrift | `PostToolUse.ps1` | Stores only a truncated preview, never the full tool result. |
 | Dynamic parameters | `_lib.ps1` | Every limit is read from the environment at run time. |
 | One commit per file | `PreToolUse.ps1` | Blocks bulk commits (see below). |
+| Local-only handoff | `PreToolUse.ps1` | Blocks `git add`/`git commit` targeting the gitignored `docs/progress.md` (see below). |
 
 ### `logs/tool-usage.txt`
 
@@ -56,6 +57,9 @@ runaway session without adding a dependency.
 - `git commit .`
 - `git add -A`, `git add --all`, `git add .`
 - a plain `git commit` while **more than one** file is staged
+- `git add` (incl. `-f`) or a pathspec `git commit` naming `docs/progress.md`,
+  which `.gitignore` keeps local-only (session handoff, never push)
+- a `git commit` while `docs/progress.md` is staged
 
 Blocking is reported through `errorMessage`, so Cline sees the rule and can
 re-run a per-file commit, for example:
