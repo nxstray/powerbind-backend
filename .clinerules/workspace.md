@@ -39,10 +39,12 @@ through `excludedGroups`; do not widen that list without being asked.
 - Lanjutan sesi lama: baca `docs/progress.md` dulu, jangan explore ulang dari nol
   (protokolnya di `.clinerules/progress.md`).
 
-## Pre-commit stack check
+## Pre-commit / pre-push stack check
 
 The sonar CI job and the live log/metrics checks run against **this machine**,
-so before committing backend work these must be answering:
+so before committing or pushing backend work these must be answering (push is
+what triggers the sonar job on the self-hosted runner, so the check applies to
+push just as much as to commit):
 
 | Service | Where | How to verify |
 | --- | --- | --- |
