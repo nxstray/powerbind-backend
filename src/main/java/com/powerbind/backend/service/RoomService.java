@@ -4,7 +4,9 @@ import com.powerbind.backend.data.request.RoomRequest;
 import com.powerbind.backend.data.response.AnomalyEventResponse;
 import com.powerbind.backend.data.response.RoomResponse;
 import com.powerbind.backend.global.ResourceNotFoundException;
+import com.powerbind.backend.model.PresenceLog;
 import com.powerbind.backend.model.Room;
+import com.powerbind.backend.repository.PresenceLogRepository;
 import com.powerbind.backend.repository.RoomRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class RoomService {
 
     private final RoomRepository roomRepository;
+    private final PresenceLogRepository presenceLogRepository;
     private final MqttPublisherService mqttPublisherService;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -111,6 +114,14 @@ public class RoomService {
         }
 
         room = roomRepository.save(room);
+
+        // Append-only event history for thesis evidence (B-4): one row per
+        // incoming presence reading, so presence_logs mirrors the InfluxDB
+        // presence measurement and SELECT ... LIMIT 5 always returns rows.
+        presenceLogRepository.save(PresenceLog.builder()
+                .room(room)
+                .detected(detected)
+                .build());
 
         publishAnomalyIfNewlyWasting(room, wasWasting);
 
