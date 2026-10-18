@@ -4,7 +4,9 @@ import com.powerbind.backend.data.request.RoomRequest;
 import com.powerbind.backend.data.response.AnomalyEventResponse;
 import com.powerbind.backend.data.response.RoomResponse;
 import com.powerbind.backend.global.ResourceNotFoundException;
+import com.powerbind.backend.model.PresenceLog;
 import com.powerbind.backend.model.Room;
+import com.powerbind.backend.repository.PresenceLogRepository;
 import com.powerbind.backend.repository.RoomRepository;
 import com.powerbind.backend.service.MqttPublisherService;
 import com.powerbind.backend.service.RoomService;
@@ -34,6 +36,7 @@ import static org.mockito.Mockito.*;
 class RoomServiceTest {
 
     @Mock private RoomRepository roomRepository;
+    @Mock private PresenceLogRepository presenceLogRepository;
     @Mock private MqttPublisherService mqttPublisherService;
     @Mock private SimpMessagingTemplate messagingTemplate;
 
@@ -207,6 +210,11 @@ class RoomServiceTest {
         assertTrue(updated.isPresenceDetected());
         assertTrue(updated.isRelayOn());
         assertEquals(0, updated.getNoPresenceSeconds());
+
+        ArgumentCaptor<PresenceLog> logCaptor = ArgumentCaptor.forClass(PresenceLog.class);
+        verify(presenceLogRepository).save(logCaptor.capture());
+        assertEquals(room, logCaptor.getValue().getRoom());
+        assertTrue(logCaptor.getValue().isDetected());
     }
 
     @Test
