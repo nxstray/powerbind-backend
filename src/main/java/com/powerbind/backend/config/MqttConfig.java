@@ -6,9 +6,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.EventListener;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
+import org.springframework.integration.mqtt.event.MqttConnectionFailedEvent;
+import org.springframework.integration.mqtt.event.MqttSubscribedEvent;
 import org.springframework.integration.mqtt.inbound.MqttPahoMessageDrivenChannelAdapter;
 import org.springframework.integration.mqtt.support.DefaultPahoMessageConverter;
 import org.springframework.messaging.Message;
@@ -74,5 +77,20 @@ public class MqttConfig {
                 log.error("[MQTT] Error processing message: {}", e.getMessage(), e);
             }
         };
+    }
+
+    // Connection lifecycle for thesis stability evidence (W-3/B-1): the Paho
+    // client reconnects silently (see MqttClientFactoryConfig), so without
+    // these listeners a broker outage leaves no explicit trace — only the
+    // RoomTimeoutService offline marks. DEBUG level keeps the steady state
+    // quiet; enable it during physical tests (see .clinerules/thesis-bab4.md).
+    @EventListener
+    public void onMqttConnectionFailed(MqttConnectionFailedEvent event) {
+        log.debug("[MQTT] Connection failed: {}", event.getCause());
+    }
+
+    @EventListener
+    public void onMqttSubscribed(MqttSubscribedEvent event) {
+        log.debug("[MQTT] Subscribed: {}", event.getMessage());
     }
 }
